@@ -1,0 +1,34 @@
+BLOCKFRONT WORLDS V2 — START HERE
+=================================
+
+LOCAL TEST
+1. Open this exact folder in VS Code.
+2. Open Terminal -> New Terminal.
+3. Run:
+
+   .\run_windows.bat
+
+4. Keep that terminal open.
+5. In Chrome/Edge open:
+
+   http://127.0.0.1:8000
+
+PUBLIC WEBSITE
+Read DEPLOY_RENDER.md. The short version is:
+GitHub repo -> Render Web Service -> public HTTPS address -> optional custom domain.
+
+EDITING AFTER IT IS ONLINE
+Continue editing this folder/repository normally in VS Code.
+Commit + push your changes to GitHub; Render can redeploy them automatically.
+
+VOXEL FRONTIER
+B = combat/build toggle
+Left click in build mode = mine
+Right click in build mode = place
+V = cycle block
+1–7 = select block
+E = lever
+Q = sword/melee
+
+ADS
+Ads are OFF by default. Read MONETIZATION.md before enabling them.

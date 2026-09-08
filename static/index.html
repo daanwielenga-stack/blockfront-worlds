@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+  <meta name="theme-color" content="#111318" />
+  <meta name="description" content="Blockfront Worlds — a fast multiplayer browser FPS across five original game worlds." />
+  <title>Blockfront Worlds</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div id="game"></div>
+  <div id="vignette"></div>
+  <div id="damageFlash"></div>
+
+  <section id="menu" class="screen show">
+    <header class="menu-topbar">
+      <div class="micro">LEVEL 1 <span class="xpbar"><i></i></span> <b id="menuName">GUEST</b></div>
+      <div class="micro right"><span id="menuFps">0 FPS</span> · <span id="menuPing">CONNECTING</span></div>
+    </header>
+
+    <aside class="left-nav">
+      <button id="worldsBtn">🌍 Worlds</button>
+      <button id="serversBtn">🌐 Servers</button>
+      <button id="classBtnSide">🎯 Loadout</button>
+      <button id="settingsBtn">⚙ Settings</button>
+      <a href="/privacy" target="_blank">Privacy</a>
+      <a href="/terms" target="_blank">Terms</a>
+    </aside>
+
+    <div class="brand-wrap">
+      <div class="brand">BLOCKFRONT</div>
+      <div class="subbrand">WORLDS</div>
+      <button id="playBtn" class="click-play">CLICK TO PLAY</button>
+      <div class="match-label">
+        <span id="worldLabel">CLASSIC ARENA</span>
+        <b>·</b>
+        <span id="modeLabel">FFA</span>
+        <b>·</b>
+        <span id="roomLabel">PUBLIC</span>
+      </div>
+    </div>
+
+    <aside class="loadout-card" id="loadoutCard">
+      <div class="tiny">LOADOUT</div>
+      <div id="className" class="class-name">Triggerman</div>
+      <div id="weaponName" class="weapon-name">Assault Rifle</div>
+      <button id="classBtn">CUSTOMIZE</button>
+    </aside>
+
+    <section class="world-dock" aria-label="World selection">
+      <div class="world-dock-title">CHOOSE WORLD</div>
+      <div id="worldQuickSelect" class="world-quick-select"></div>
+    </section>
+
+    <div class="bottom-actions">
+      <button id="hostBtn" class="purple">HOST GAME</button>
+      <button id="quickBtn" class="red">QUICK PLAY</button>
+      <button id="inviteBtn" class="green">COPY INVITE</button>
+      <button id="joinBtn" class="gold">JOIN ROOM</button>
+    </div>
+
+    <!-- Reserved monetization surface. Real ads remain disabled by default and
+         disappear entirely during active gameplay. -->
+    <aside id="menuAd" class="ad-shell hidden" aria-label="Advertisement">
+      <div class="ad-label">ADVERTISEMENT</div>
+      <div id="menuAdContent" class="ad-content">Future ad placement</div>
+    </aside>
+
+    <div class="footer-note">Public alpha · original procedural worlds · multiplayer WebSockets · v2</div>
+  </section>
+
+  <div id="hud" class="hidden">
+    <div id="matchHud">
+      <span id="worldHud">CLASSIC</span>
+      <b id="hudMode">FFA</b>
+      <span id="timer">4:00</span>
+      <span id="teamScore"></span>
+    </div>
+    <div id="killfeed"></div>
+    <div id="speed">0</div>
+    <div id="crosshair"><i></i><i></i><i></i><i></i></div>
+    <div id="hitmarker">✕</div>
+    <div id="health"><span id="hp">100</span><small>HP</small><div class="healthbar"><i id="hpbar"></i></div></div>
+    <div id="ammo"><span id="mag">30</span><em>/</em><small id="reserve">∞</small><div id="weaponHud">Assault Rifle</div></div>
+    <div id="roomHud"></div>
+    <div id="respawn" class="hidden"><b>YOU DIED</b><span>Respawning…</span></div>
+    <div id="hardpoint" class="hidden">HARDPOINT</div>
+    <div id="voxelHud" class="hidden">
+      <div id="voxelMode">COMBAT MODE</div>
+      <div class="voxel-help">B build/mining · V cycle block · E use lever · Q sword</div>
+      <div id="blockHotbar"></div>
+    </div>
+    <div id="dayNight" class="hidden"><span id="dayIcon">☀</span><span id="dayLabel">DAY</span></div>
+    <div id="chatbox"><div id="chatlog"></div><input id="chatInput" maxlength="120" placeholder="Enter message…" /></div>
+  </div>
+
+  <div id="roundBreak" class="modal hidden">
+    <div class="panel break-panel">
+      <h2>ROUND COMPLETE</h2>
+      <div id="roundWinner" class="round-winner"></div>
+      <div id="breakAd" class="break-ad hidden"><div class="ad-label">ADVERTISEMENT</div><div id="breakAdContent">Future between-round ad placement</div></div>
+      <button id="continueBtn" class="primary">CONTINUE</button>
+    </div>
+  </div>
+
+  <div id="scoreboard" class="modal hidden">
+    <div class="panel wide"><h2>SCOREBOARD</h2><div id="scoreRows"></div><div class="hint">Hold TAB</div></div>
+  </div>
+
+  <div id="classModal" class="modal hidden">
+    <div class="panel wide"><button class="close" data-close="classModal">×</button><h2>CHOOSE CLASS</h2><div id="classGrid"></div></div>
+  </div>
+
+  <div id="worldModal" class="modal hidden">
+    <div class="panel world-panel"><button class="close" data-close="worldModal">×</button><h2>CHOOSE WORLD</h2><p class="muted">Every world keeps the same fast FPS core but changes the terrain, atmosphere and special mechanics.</p><div id="worldGrid"></div></div>
+  </div>
+
+  <div id="serverModal" class="modal hidden">
+    <div class="panel wide"><button class="close" data-close="serverModal">×</button><h2>LIVE ROOMS</h2><button id="refreshServersBtn" class="secondary">REFRESH</button><div id="serverList" class="server-list"></div></div>
+  </div>
+
+  <div id="hostModal" class="modal hidden">
+    <div class="panel"><button class="close" data-close="hostModal">×</button><h2>HOST GAME</h2>
+      <label>World</label><select id="hostWorld"></select>
+      <label>Mode</label><select id="hostMode"><option>FFA</option><option>TDM</option><option>HARDPOINT</option></select>
+      <button id="createRoomBtn" class="primary">CREATE PRIVATE ROOM</button>
+      <p class="muted">Friends opening your invite link join this exact world, room and mode.</p>
+    </div>
+  </div>
+
+  <div id="joinModal" class="modal hidden">
+    <div class="panel"><button class="close" data-close="joinModal">×</button><h2>JOIN GAME</h2>
+      <label>Room code</label><input id="joinCode" maxlength="12" placeholder="ABC123" />
+      <label>World</label><select id="joinWorld"></select>
+      <button id="joinRoomBtn" class="primary">JOIN</button>
+    </div>
+  </div>
+
+  <div id="settingsModal" class="modal hidden">
+    <div class="panel"><button class="close" data-close="settingsModal">×</button><h2>SETTINGS</h2>
+      <label>Player name</label><input id="nameInput" maxlength="18" />
+      <label>Mouse sensitivity <b id="sensVal"></b></label><input id="sensInput" type="range" min="0.2" max="2.5" step="0.05" />
+      <label>Field of view <b id="fovVal"></b></label><input id="fovInput" type="range" min="65" max="110" step="1" />
+      <label><input id="bobInput" type="checkbox" /> Weapon bob</label>
+      <label><input id="qualityInput" type="checkbox" /> High detail scenery</label>
+      <button id="saveSettingsBtn" class="primary">SAVE</button>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}</script>
+  <script type="module" src="/static/game.js"></script>
+</body>
+</html>

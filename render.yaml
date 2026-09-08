@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: blockfront-worlds
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: ADS_ENABLED
+        value: "0"
+      - key: ADS_PROVIDER
+        value: placeholder
+      - key: MAX_PLAYERS_PER_ROOM
+        value: "16"
