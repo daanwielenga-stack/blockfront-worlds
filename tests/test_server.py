@@ -23,7 +23,7 @@ def test_health():
     assert r.status_code == 200
     body = r.json()
     assert body['ok'] is True
-    assert body['version'] == '2.2.0'
+    assert body['version'] == '2.3.0'
 
 
 def test_config_contains_five_worlds():
@@ -40,6 +40,8 @@ def test_config_contains_five_worlds():
     assert data['weapons']['Milan Gun']['nonlethal'] is True
     assert data['weapons']['Milan Gun']['damage'] == 0
     assert data['worlds']['clan']['name'] == 'Clash of Clans'
+    assert data['worlds']['clan']['town_hall_count'] == 17
+    assert data['worlds']['clan']['town_hall_spacing'] == 105
     assert all(data['worlds'][wid]['infinite'] for wid in data['world_order'])
 
 
@@ -134,3 +136,12 @@ def test_weapon_catalog():
     assert WEAPONS['Machine Gun']['mag'] >= 50
     assert WEAPONS['Milan Gun']['damage'] == 0
     assert WEAPONS['Milan Gun']['nonlethal'] is True
+
+
+def test_clan_progression_geometry():
+    clan = WORLDS['clan']
+    assert clan['town_hall_count'] == 17
+    tags = {b['tag'] for b in clan['boxes']}
+    for th in (1, 5, 10, 17):
+        assert f'th{th}_townhall' in tags
+    assert any(b['z'] < -1600 for b in clan['boxes'] if b['tag'] == 'th17_townhall')

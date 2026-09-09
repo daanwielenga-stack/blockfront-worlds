@@ -9,7 +9,11 @@ const randCode=()=>Math.random().toString(36).slice(2,8).toUpperCase();
 const WORLD_ACCENTS={classic:'#f4b942',voxel:'#79c64a',stadium:'#36c76c',battle:'#b067ff',clan:'#e5a93a'};
 const BLOCK_TYPES=['dirt','stone','wood','glass','redstone','lamp','lever'];
 const BLOCK_COLORS={grass:'#6fb24c',dirt:'#8a5a32',stone:'#777777',wood:'#9b6b3f',glass:'#9ed7e5',redstone:'#8f1d1d',lamp:'#d7a632',lever:'#74604b'};
-const VOXEL_RENDER_RADIUS=62;
+const VOXEL_RENDER_RADIUS=92;
+const VOXEL_HORIZON_RADIUS=190;
+const VOXEL_HORIZON_STEP=4;
+const CLAN_TH_COUNT=17;
+const CLAN_TH_SPACING=105;
 const MC_HOTBAR_SIZE=9;
 
 const state={
@@ -19,7 +23,7 @@ const state={
   settings:{sens:+(localStorage.getItem('bf_sens')||1),fov:+(localStorage.getItem('bf_fov')||82),bob:localStorage.getItem('bf_bob')!=='0',quality:localStorage.getItem('bf_quality')!=='0'},
   hp:100,alive:true,ammo:30,reloading:false,lastShot:0,players:new Map(),killfeed:[],keys:{},mouseDown:false,ads:false,
   yaw:0,pitch:0,pos:new THREE.Vector3(0,0,0),vel:new THREE.Vector3(),grounded:true,slide:0,crouched:false,jumpLatch:false,landGrace:0,speedBoost:1,chat:false,
-  remote:new Map(),mobs:new Map(),ping:0,currentBoxes:[],dynamicBlocks:new Map(),buildMode:false,blockIndex:0,mcHotbar:0,mcSprint:false,lastWDown:0,stepAt:0,worldTime:0,streamChunk:'',voxelRenderKey:'',milanProjectiles:[]
+  remote:new Map(),mobs:new Map(),ping:0,currentBoxes:[],dynamicBlocks:new Map(),buildMode:false,blockIndex:0,mcHotbar:0,mcSprint:false,lastWDown:0,stepAt:0,worldTime:0,streamChunk:'',voxelRenderKey:'',voxelHorizonKey:'',clanRenderKey:'',milanProjectiles:[]
 };
 
 let scene,camera,renderer,clock,weaponGroup,muzzle,worldGroup,streamGroup,dynamicGroup,remoteGroup,mobGroup,decorGroup,hardpointMesh;
@@ -47,7 +51,7 @@ async function boot(){
 
 function setupScene(){
   scene=new THREE.Scene();
-  camera=new THREE.PerspectiveCamera(state.settings.fov,innerWidth/innerHeight,.05,420);camera.rotation.order='YXZ';
+  camera=new THREE.PerspectiveCamera(state.settings.fov,innerWidth/innerHeight,.05,650);camera.rotation.order='YXZ';
   renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});renderer.shadowMap.enabled=state.settings.quality;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.setPixelRatio(Math.min(devicePixelRatio,state.settings.quality?1.6:1.15));renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;$('#game').appendChild(renderer.domElement);
   hemi=new THREE.HemisphereLight(0xffffff,0x53674e,2.0);scene.add(hemi);
   sun=new THREE.DirectionalLight(0xffffff,1.25);sun.position.set(30,55,18);sun.castShadow=state.settings.quality;sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.left=-70;sun.shadow.camera.right=70;sun.shadow.camera.top=70;sun.shadow.camera.bottom=-70;scene.add(sun);
@@ -82,8 +86,8 @@ function voxelMaterial(type,powered=false){
 
 function buildWorld(id){
   const w=state.config.worlds[id];if(!w)return;
-  clearGroup(worldGroup);clearGroup(streamGroup);clearGroup(decorGroup);clearGroup(dynamicGroup);clearGroup(mobGroup);state.dynamicBlocks.clear();state.mobs.clear();state.streamChunk='';state.voxelRenderKey='';
-  scene.background=color(w.sky);scene.fog=new THREE.Fog(color(w.fog),58,id==='stadium'?145:125);hemi.intensity=2;sun.intensity=1.25;moonLight.intensity=0;stormRing=null;skySun=skyMoon=stars=null;
+  clearGroup(worldGroup);clearGroup(streamGroup);clearGroup(decorGroup);clearGroup(dynamicGroup);clearGroup(mobGroup);state.dynamicBlocks.clear();state.mobs.clear();state.streamChunk='';state.voxelRenderKey='';state.voxelHorizonKey='';state.clanRenderKey='';
+  scene.background=color(w.sky);scene.fog=new THREE.Fog(color(w.fog),id==='voxel'?95:58,id==='voxel'?245:id==='clan'?260:id==='stadium'?145:125);hemi.intensity=2;sun.intensity=1.25;moonLight.intensity=0;stormRing=null;skySun=skyMoon=stars=null;
   buildGround(w);for(const b of w.boxes)addStyledWorldBox(w,b);buildDecor(w);updateStreamingWorld(true);state.currentBoxes=[...w.boxes];
   $('#voxelHud').classList.toggle('hidden',id!=='voxel');$('#dayNight').classList.toggle('hidden',id!=='voxel');state.buildMode=false;if(id==='voxel')state.mcHotbar=0;updateBuildHud();refreshWorldUI();createWeapon();
 }
@@ -108,10 +112,7 @@ function buildGround(w){
     addPlane(worldGroup,140,140,0x2f965a,0,-.01,0);
     for(let i=-12;i<13;i++)addPlane(worldGroup,5.7,140,i%2?0x2b8d52:0x349d5f,i*5.7,.006,0);
   }else if(w.theme==='clan'){
-    const ground=new THREE.Mesh(new THREE.PlaneGeometry(190,190),new THREE.MeshToonMaterial({map:clanGrassTexture(),color:0xffffff}));
-    ground.rotation.x=-Math.PI/2;ground.position.y=-.02;ground.receiveShadow=true;worldGroup.add(ground);
-    // soft decorative dirt border that gives the village a handcrafted mobile-game island feel
-    const rim=new THREE.Mesh(new THREE.RingGeometry(65,88,64),new THREE.MeshToonMaterial({color:0x6fa64e,side:THREE.DoubleSide}));rim.rotation.x=-Math.PI/2;rim.position.y=-.01;worldGroup.add(rim);
+    // Nearby Town Hall villages provide their own grass patches and progression road.
   }else{
     addPlane(worldGroup,180,180,w.ground,0,-.01,0);
   }
@@ -136,13 +137,9 @@ function renderClanWall(b){
 }
 function addStyledWorldBox(w,b){
   if(w.theme==='clan'){
-    if(b.tag==='path'){
-      const m=new THREE.Mesh(new THREE.PlaneGeometry(b.w,b.d),new THREE.MeshToonMaterial({color:0xd7c39d,transparent:true,opacity:.85,side:THREE.DoubleSide}));m.rotation.x=-Math.PI/2;m.position.set(b.x,.025,b.z);worldGroup.add(m);return m;
-    }
-    if(b.tag==='clanwall'){renderClanWall(b);return null}
-    // All other clan boxes remain collision-only. Their visible forms are custom-built in decorClan(),
-    // which makes the world look like a completely separate game rather than reskinned Krunker geometry.
-    const ghost=addBox(worldGroup,b,new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}));ghost.visible=false;return ghost;
+    // All Clash progression boxes are collision-only. Nearby TH villages are rendered
+    // separately by updateClanProgressionRender(), so we never draw all 17 bases at once.
+    return null;
   }
   let m;
   if(w.theme==='voxel'){
@@ -172,6 +169,7 @@ function createWalleCleaner(){
   const body=clanMesh(g,new THREE.BoxGeometry(2.6,2.25,2.0),yellow,0,1.75,0);body.castShadow=true;
   // front identity panel drawn procedurally; no external copyrighted asset file is bundled
   const panel=new THREE.Mesh(new THREE.PlaneGeometry(1.75,.63),makeTextPanel('WALL·E','#b88b1f','#241d16'));panel.position.set(0,1.72,-1.012);g.add(panel);
+  const robotName=makeLabel('Robotje van Bomhof');robotName.position.set(0,5.25,0);robotName.scale.set(4.6,1.15,1);g.add(robotName);
   // tracked drive units
   const treadGeo=new THREE.BoxGeometry(.7,1.25,2.45);
   for(const s of [-1,1]){
@@ -314,28 +312,144 @@ function clanCamp(group,x,z){
 function clanBush(group,x,z,s=1){const base=clanMesh(group,new THREE.DodecahedronGeometry(1.1*s,0),clanMaterial(0x4d9e49),x,.8*s,z);base.scale.y=.8;for(const dx of [-.55,.55]){const q=clanMesh(group,new THREE.DodecahedronGeometry(.72*s,0),clanMaterial(0x5bab4f),x+dx*s,1.0*s,z+.15*s);q.scale.y=.9}}
 function clanTree(group,x,z,s=1){clanCylinder(group,x,1.45*s,z,.35*s,.48*s,2.9*s,0x7a5132,7);const a=clanMesh(group,new THREE.DodecahedronGeometry(1.75*s,0),clanMaterial(0x4e9f48),x,3.45*s,z);a.scale.y=.82;const b=clanMesh(group,new THREE.DodecahedronGeometry(1.25*s,0),clanMaterial(0x65b75b),x+.7*s,3.65*s,z-.25*s);b.scale.y=.85}
 function decorClan(){
-  // The rendered village is intentionally a separate stylized scene: bright tiled grass, chunky toy-like geometry,
-  // rounded low-poly props, warm shadows and saturated resource colors rather than FPS-map boxes.
-  clanTownHall(decorGroup,0,0,1.0);
-  clanGoldStorage(decorGroup,-15,-15);clanGoldStorage(decorGroup,15,15);
-  clanElixirStorage(decorGroup,-15,15);clanElixirStorage(decorGroup,15,-15);
-  for(const [x,z] of [[-28,0],[28,0],[0,-28],[0,28]])clanArcherTower(decorGroup,x,z);
-  clanCannon(decorGroup,-30,-8,.4);clanCannon(decorGroup,30,8,3.5);clanCannon(decorGroup,-8,30,2.1);clanCannon(decorGroup,8,-30,-1.0);
-  clanMortar(decorGroup,-16,0);clanMortar(decorGroup,16,0);
-  clanBarracks(decorGroup,0,-16,0);clanBarracks(decorGroup,0,16,Math.PI/2);
-  clanCastle(decorGroup,-8,8);clanCastle(decorGroup,8,-8);
-  clanWizardTower(decorGroup,-24,14);clanWizardTower(decorGroup,24,-14);
-  clanCamp(decorGroup,-34,12);clanCamp(decorGroup,34,-12);
-  clanCollector(decorGroup,-34,-12,false);clanCollector(decorGroup,34,12,true);
-  // builder huts outside the walls
-  for(const [x,z] of [[-30,-24],[30,24],[30,-24],[-30,24]]){
-    clanBox(decorGroup,x,1.25,z,5.6,2.5,5.3,0x9a623d);clanRoof(decorGroup,x,3.45,z,4.1,2.5,0xc84c3d);clanBox(decorGroup,x+1.35,4.0,z-1.05,.55,1.7,.55,0x5d4638);
-  }
-  // dense decorative forest and shrubs around the playable village, matching the lush edge seen in village views
-  const trees=[[-46,-40,1.1],[-40,-48,.9],[-28,-48,1.05],[-12,-48,.9],[7,-48,1.1],[25,-48,.9],[43,-42,1.05],[48,-26,.95],[48,-7,1.1],[48,14,.9],[45,35,1.05],[31,47,.95],[12,48,1.05],[-8,48,.9],[-28,47,1.0],[-44,37,.95],[-48,18,1.1],[-48,-4,.9],[-47,-24,1.0]];
-  for(const [x,z,s] of trees)clanTree(decorGroup,x,z,s);
-  for(const [x,z,s] of [[-38,4,.9],[-37,28,.75],[38,-31,.85],[38,25,.7],[-24,36,.8],[28,37,.85],[-38,-30,.75],[40,3,.8]])clanBush(decorGroup,x,z,s);
+  // The visible progression is streamed around the player; keep the permanent decor group empty.
 }
+
+const CLAN_TH_THEMES=[
+  null,
+  {body:0x8d5b36,roof:0xe79535,trim:0x5f412d,wall:0x6b4b32,accent:0xf2c56f,dark:0x3d3028},
+  {body:0x9d8b72,roof:0xe78f31,trim:0x6d5f50,wall:0x7f766b,accent:0xe8c071,dark:0x4b433c},
+  {body:0x9e8d75,roof:0xe58c2f,trim:0x6f5f4d,wall:0x8e8a82,accent:0xf0c36d,dark:0x4a4239},
+  {body:0x99836b,roof:0xdc8429,trim:0x55504c,wall:0x55585d,accent:0xe2b75f,dark:0x37393d},
+  {body:0x89796b,roof:0xd98628,trim:0xc49a49,wall:0xc99a35,accent:0xf5d66f,dark:0x4d4237},
+  {body:0x786b59,roof:0xd98628,trim:0xcba443,wall:0xc44ad1,accent:0xf4cf5e,dark:0x433a34},
+  {body:0x55504d,roof:0xb66b28,trim:0xc79c37,wall:0x6d347b,accent:0xd7b857,dark:0x292727},
+  {body:0x4d4b4c,roof:0xa45f26,trim:0xc59d45,wall:0x292b30,accent:0xf1bf55,dark:0x1b1d20},
+  {body:0x44474c,roof:0x5a4b40,trim:0xd0a044,wall:0x333136,accent:0xf0b04a,dark:0x18191b},
+  {body:0x29282a,roof:0x3a2520,trim:0xe06b2d,wall:0x332426,accent:0xff7b2f,dark:0x111113,glow:0xff4b16},
+  {body:0xe4ded1,roof:0xc6b69a,trim:0xd6a23b,wall:0x4b3d39,accent:0xf18a39,dark:0x272421,glow:0xff6d2a},
+  {body:0x263e62,roof:0x1970a9,trim:0xe0b34a,wall:0x2b5385,accent:0x5ad9ff,dark:0x121c2c,glow:0x44dfff},
+  {body:0x274c51,roof:0x1b8a91,trim:0x6e4d87,wall:0x5ba8b4,accent:0xa6eff5,dark:0x1d2730,glow:0x72e4ff},
+  {body:0x545048,roof:0x25805e,trim:0xd8b249,wall:0x3d8067,accent:0x75da7c,dark:0x282d28,glow:0x66ff82},
+  {body:0x40364f,roof:0x5e2b81,trim:0x2fb7a9,wall:0x61429a,accent:0xf082ff,dark:0x211a2b,glow:0xb64cff},
+  {body:0xd6d0c3,roof:0x9c3f35,trim:0xe1b54b,wall:0xa6423b,accent:0xf0d16e,dark:0x39312d,glow:0xffbf43},
+  {body:0x172639,roof:0x20364e,trim:0xd7a83d,wall:0x26374e,accent:0xf2ba47,dark:0x0c121b,glow:0xff8b28},
+];
+function clanTheme(th){return CLAN_TH_THEMES[clamp(th,1,17)]}
+function clanGlowMaterial(c,intensity=.8){return new THREE.MeshPhongMaterial({color:c,emissive:c,emissiveIntensity:intensity,shininess:75})}
+function clanTownHallLevel(group,x,z,th){
+  const t=clanTheme(th),s=.72+Math.min(th,12)*.025;
+  clanBox(group,x,1.3*s,z,8.6*s,2.6*s,7.8*s,t.body);
+  clanBox(group,x,2.65*s,z,7.5*s,.55*s,6.8*s,t.trim);
+  if(th<=2){clanRoof(group,x,4.1*s,z,5.6*s,2.5*s,t.roof)}
+  else{
+    clanRoof(group,x,4.25*s,z,5.45*s,2.25*s,t.roof);
+    clanBox(group,x,4.45*s,z,4.9*s,.65*s,4.6*s,t.body);
+    clanRoof(group,x,5.75*s,z,3.55*s,1.9*s,t.roof);
+  }
+  // entrance and trim
+  clanBox(group,x,1.7*s,z-3.96*s,2.0*s,2.45*s,.18*s,t.dark);
+  clanBox(group,x,3.0*s,z-4.08*s,2.8*s,.24*s,.14*s,t.accent);
+  if(th>=6){for(const sx of [-1,1])clanCylinder(group,x+sx*3.15*s,2.0*s,z,.20*s,.26*s,3.6*s,t.accent,8)}
+  if(th>=7&&th<=9){
+    // medieval rooftop battlements
+    clanBox(group,x,6.15*s,z,4.4*s,.45*s,4.4*s,t.dark);
+    for(const dx of [-1.75,0,1.75])for(const dz of [-1.75,1.75])clanBox(group,x+dx*s,6.55*s,z+dz*s,.55*s,.8*s,.55*s,t.trim);
+  }
+  if(th===10||th===11){
+    const lava=new THREE.Mesh(new THREE.RingGeometry(4.4*s,5.0*s,36),clanGlowMaterial(t.glow,.7));lava.rotation.x=-Math.PI/2;lava.position.set(x,.07,z);group.add(lava);
+    const core=clanMesh(group,new THREE.CylinderGeometry(.85*s,.95*s,.55*s,14),clanGlowMaterial(t.glow,1.1),x,6.65*s,z);core.castShadow=false;
+  }
+  if(th===12){
+    const coil=clanMesh(group,new THREE.TorusGeometry(1.05*s,.16*s,8,22),clanGlowMaterial(t.glow,1.0),x,6.55*s,z,Math.PI/2,0,0);coil.castShadow=false;
+    for(const sx of [-1,1])clanCylinder(group,x+sx*2.2*s,4.7*s,z,.10*s,.10*s,2.4*s,t.accent,8);
+  }
+  if(th===13){
+    const ice=clanMesh(group,new THREE.OctahedronGeometry(1.2*s,0),clanGlowMaterial(t.glow,.65),x,6.55*s,z);ice.scale.y=.7;ice.castShadow=false;
+  }
+  if(th===14){
+    const pool=clanMesh(group,new THREE.CylinderGeometry(2.2*s,2.2*s,.18*s,24),new THREE.MeshPhongMaterial({color:0x56c978,transparent:true,opacity:.85,shininess:90}),x,6.35*s,z);pool.castShadow=false;
+    for(const sx of [-1,1])clanBush(group,x+sx*3.0*s,z+1.5*s,.55*s);
+  }
+  if(th===15){
+    for(const sx of [-1,1]){const crystal=clanMesh(group,new THREE.OctahedronGeometry(.72*s,0),clanGlowMaterial(t.glow,.9),x+sx*2.7*s,5.45*s,z);crystal.castShadow=false}
+  }
+  if(th===16){
+    const orb=clanMesh(group,new THREE.IcosahedronGeometry(1.15*s,1),new THREE.MeshStandardMaterial({color:0xb9b0a2,roughness:.75,metalness:.1}),x,6.65*s,z);orb.castShadow=true;
+    clanMesh(group,new THREE.TorusGeometry(1.38*s,.18*s,8,24),clanMaterial(t.accent),x,6.62*s,z,Math.PI/2,0,0);
+  }
+  if(th===17){
+    // dark justice / inferno-artillery crown
+    clanCylinder(group,x,6.4*s,z,1.25*s,1.55*s,.75*s,t.dark,10);
+    for(let i=0;i<4;i++){const a=i*Math.PI/2;const barrel=clanCylinder(group,x+Math.sin(a)*.6*s,7.1*s,z+Math.cos(a)*.6*s,.16*s,.26*s,1.7*s,t.accent,9,-.8,0,a);barrel.castShadow=false}
+    const core=clanMesh(group,new THREE.SphereGeometry(.48*s,12,9),clanGlowMaterial(t.glow,1.15),x,7.25*s,z);core.castShadow=false;
+  }
+  const label=makeLabel(`Town Hall ${th}`);label.position.set(x,8.4*s,z+5.6*s);label.scale.set(3.7,.92,1);group.add(label);
+}
+function clanWallPieceLevel(group,x,z,th){
+  if(th<2)return;const t=clanTheme(th);let base;
+  if(th===2){base=clanMesh(group,new THREE.DodecahedronGeometry(.82,0),clanMaterial(0x87827a),x,.72,z);base.scale.set(1.05,.9,1.05)}
+  else if(th===3){clanBox(group,x,.78,z,1.65,1.42,1.65,0x99958d)}
+  else if(th===4){clanBox(group,x,.9,z,1.62,1.72,1.62,0x44484e)}
+  else if(th===5){clanBox(group,x,.9,z,1.62,1.72,1.62,0xc99c36);clanBox(group,x,1.78,z,1.3,.22,1.3,0xf0cf6b)}
+  else if(th===6||th===7){const q=clanMesh(group,new THREE.OctahedronGeometry(.95,0),clanMaterial(th===6?0xc34fca:0x6d347b),x,1.0,z);q.scale.y=1.35}
+  else if(th===8){clanBox(group,x,.95,z,1.75,1.8,1.75,0x22252a);const skull=clanMesh(group,new THREE.SphereGeometry(.30,10,8),clanMaterial(0xd0c8b6),x,1.85,z);skull.scale.y=.8}
+  else if(th<=11){clanBox(group,x,.95,z,1.72,1.8,1.72,t.wall);const strip=clanBox(group,x,1.82,z,1.22,.18,1.22,t.glow||0xff6b2d);strip.material=clanGlowMaterial(t.glow||0xff6b2d,.75)}
+  else{clanBox(group,x,.95,z,1.72,1.8,1.72,t.wall);clanBox(group,x,1.86,z,1.32,.22,1.32,t.accent);if(th>=15){const spike=clanMesh(group,new THREE.ConeGeometry(.38,.9,4),clanGlowMaterial(t.glow||t.accent,.35),x,2.35,z);spike.rotation.y=Math.PI/4}}
+}
+function clanWallRingLevel(group,cx,cz,th){
+  if(th<2)return;const half=Math.min(14+th*.45,21),step=2.05,gate=5.4;
+  for(let o=-half;o<=half+.01;o+=step){
+    if(Math.abs(o)>gate){clanWallPieceLevel(group,cx+o,cz-half,th);clanWallPieceLevel(group,cx+o,cz+half,th)}
+    clanWallPieceLevel(group,cx-half,cz+o,th);clanWallPieceLevel(group,cx+half,cz+o,th);
+  }
+}
+function clanDefenseModel(group,type,x,z,th){
+  const t=clanTheme(th),metal=t.dark,accent=t.accent,glow=t.glow||accent;
+  if(type==='cannon'){clanCylinder(group,x,.55,z,1.35,1.65,.9,t.trim,9);clanCylinder(group,x,1.45,z,.32,.50,2.7,metal,10,Math.PI/2,0,.18)}
+  else if(type==='archer'||type==='multiarcher'){for(const sx of [-1,1])for(const sz of [-1,1])clanCylinder(group,x+sx*.9,2.2,z+sz*.9,.12,.18,4.3,t.trim,6);clanBox(group,x,4.35,z,3.2,.45,3.2,t.wall);const n=type==='multiarcher'?3:1;for(let i=0;i<n;i++){const bow=clanMesh(group,new THREE.TorusGeometry(.42,.05,5,16,Math.PI),clanMaterial(accent),x+(i-(n-1)/2)*.55,5.25,z-.15,0,Math.PI/2,.2);bow.castShadow=false}}
+  else if(type==='mortar'){clanCylinder(group,x,.45,z,1.6,1.9,.75,t.trim,10);clanCylinder(group,x,1.35,z,.58,.82,2.35,metal,12,-.55,0,.12)}
+  else if(type==='air'){clanCylinder(group,x,.45,z,1.3,1.55,.7,t.trim,10);for(let i=0;i<4;i++){const a=i*Math.PI/2;clanMesh(group,new THREE.ConeGeometry(.25,1.6,6),clanMaterial(accent),x+Math.cos(a)*.55,1.65,z+Math.sin(a)*.55,0,0,-.1)}}
+  else if(type==='wizard'||type==='spell'){clanCylinder(group,x,1.55,z,1.45,1.9,3.1,t.wall,9);const orb=clanMesh(group,new THREE.OctahedronGeometry(type==='spell'?.9:.7,0),clanGlowMaterial(glow,.9),x,3.9,z);orb.castShadow=false}
+  else if(type==='sweeper'){clanCylinder(group,x,.55,z,1.25,1.45,.85,t.trim,9);const fan=clanMesh(group,new THREE.CylinderGeometry(.65,.65,.35,12),clanMaterial(metal),x,1.65,z-.35,Math.PI/2,0,0);for(let i=0;i<4;i++){const blade=clanBox(group,x,1.65,z-.58,1.45,.18,.15,accent);blade.rotation.z=i*Math.PI/2}}
+  else if(type==='tesla'){clanBox(group,x,.55,z,2.0,.8,2.0,t.trim);clanCylinder(group,x,2.0,z,.10,.14,2.8,metal,8);for(let i=0;i<3;i++){const ring=clanMesh(group,new THREE.TorusGeometry(.62-i*.10,.08,7,18),clanGlowMaterial(glow,.65),x,2.3+i*.45,z,Math.PI/2,0,0);ring.castShadow=false}}
+  else if(type==='bomb'){clanCylinder(group,x,.8,z,1.45,1.75,1.5,t.trim,10);const bomb=clanMesh(group,new THREE.SphereGeometry(.78,12,9),clanMaterial(metal),x,2.25,z);clanCylinder(group,x+.35,3.0,z,.08,.10,.9,accent,6,0,0,.45)}
+  else if(type==='xbow'){clanCylinder(group,x,.5,z,1.45,1.65,.8,t.trim,10);clanBox(group,x,1.65,z,.35,.35,2.8,metal);for(const sx of [-1,1]){const arm=clanBox(group,x+sx*.75,2.0,z,1.3,.16,.18,accent);arm.rotation.z=sx*.38}}
+  else if(type==='inferno'){clanCylinder(group,x,1.35,z,1.25,1.55,2.7,metal,10);const flame=clanMesh(group,new THREE.ConeGeometry(.62,1.5,8),clanGlowMaterial(glow,1.2),x,3.45,z);flame.castShadow=false}
+  else if(type==='eagle'){clanBox(group,x,.65,z,3.3,1.1,3.3,t.trim);clanCylinder(group,x,1.65,z,.35,.55,1.9,metal,8);for(const sx of [-1,1]){const wing=clanBox(group,x+sx*1.05,2.55,z,1.9,.20,.8,accent);wing.rotation.z=sx*.35}clanMesh(group,new THREE.ConeGeometry(.32,1.1,5),clanMaterial(accent),x,2.7,z-1.0,Math.PI/2,0,0)}
+  else if(type==='giga'){clanCylinder(group,x,.7,z,1.5,1.75,1.1,t.trim,10);const coil=clanMesh(group,new THREE.TorusGeometry(.8,.13,7,20),clanGlowMaterial(glow,1),x,2.1,z,Math.PI/2,0,0);coil.castShadow=false}
+  else if(type==='scatter'){clanCylinder(group,x,.6,z,1.55,1.8,1.0,t.trim,10);for(const sx of [-1,1]){const barrel=clanCylinder(group,x+sx*.45,2.1,z,.28,.42,2.25,metal,9,Math.PI/2,0,.15);barrel.rotation.z=sx*.08}}
+  else if(type==='builder'){clanBox(group,x,1.0,z,3.2,2.0,3.0,t.body);clanRoof(group,x,2.65,z,2.35,1.55,t.roof);const hammer=clanBox(group,x+1.2,3.3,z,.25,2.1,.25,accent);hammer.rotation.z=.55}
+  else if(type==='monolith'){clanMesh(group,new THREE.CylinderGeometry(.8,1.45,4.7,4),clanGlowMaterial(glow,.55),x,2.35,z,0,Math.PI/4,0);clanMesh(group,new THREE.OctahedronGeometry(.62,0),clanGlowMaterial(glow,1.0),x,5.0,z)}
+  else if(type==='ricochet'){clanCylinder(group,x,.6,z,1.6,1.9,1.0,t.trim,10);for(const sx of [-1,1])clanCylinder(group,x+sx*.42,1.85,z,.28,.48,2.5,metal,10,Math.PI/2,0,.1)}
+  else if(type==='firespitter'){clanCylinder(group,x,.65,z,1.65,1.95,1.1,t.trim,10);for(const sx of [-1,1]){const mouth=clanMesh(group,new THREE.ConeGeometry(.48,2.2,8),clanGlowMaterial(glow,.65),x+sx*.5,2.0,z-.25,-1.05,0,0);mouth.castShadow=false}}
+  else if(type==='multigear'){clanCylinder(group,x,.7,z,1.65,1.9,1.1,t.trim,10);clanBox(group,x,2.15,z,2.4,.45,2.4,accent);clanCylinder(group,x,3.0,z,.26,.42,2.2,metal,10,Math.PI/2,0,.2);for(const sx of [-1,1])clanMesh(group,new THREE.TorusGeometry(.38,.06,5,16,Math.PI),clanMaterial(accent),x+sx*.75,3.15,z-.2,0,Math.PI/2,.2)}
+}
+function clanDefenseSet(th){
+  if(th===1)return ['cannon'];if(th===2)return ['cannon','archer'];if(th===3)return ['cannon','archer','mortar'];if(th===4)return ['cannon','archer','mortar','air'];
+  if(th===5)return ['archer','mortar','air','wizard'];if(th===6)return ['mortar','air','wizard','sweeper'];if(th===7)return ['wizard','sweeper','tesla','archer'];if(th===8)return ['tesla','bomb','wizard','mortar'];
+  if(th===9)return ['xbow','tesla','wizard','mortar'];if(th===10)return ['inferno','xbow','bomb','wizard'];if(th===11)return ['eagle','inferno','xbow','wizard'];if(th===12)return ['giga','inferno','xbow','tesla'];
+  if(th===13)return ['scatter','inferno','xbow','wizard'];if(th===14)return ['builder','scatter','inferno','eagle'];if(th===15)return ['monolith','spell','scatter','inferno'];if(th===16)return ['multiarcher','ricochet','monolith','scatter'];
+  return ['firespitter','multigear','multiarcher','ricochet'];
+}
+function renderClanVillage(group,th,cx,cz){
+  const patch=new THREE.Mesh(new THREE.PlaneGeometry(82,82),new THREE.MeshToonMaterial({map:clanGrassTexture(),color:0xffffff}));patch.rotation.x=-Math.PI/2;patch.position.set(cx,-.025,cz);patch.receiveShadow=state.settings.quality;group.add(patch);
+  // progression road through the central gates
+  const road=new THREE.Mesh(new THREE.PlaneGeometry(9,CLAN_TH_SPACING),new THREE.MeshToonMaterial({color:0xd8c59d,side:THREE.DoubleSide}));road.rotation.x=-Math.PI/2;road.position.set(cx,.005,cz-CLAN_TH_SPACING/2);group.add(road);
+  clanWallRingLevel(group,cx,cz,th);clanTownHallLevel(group,cx,cz,th);
+  const types=clanDefenseSet(th),pos=[[-13,-9],[13,9],[-13,9],[13,-9],[0,-15],[0,15]];
+  types.forEach((type,i)=>clanDefenseModel(group,type,cx+pos[i][0],cz+pos[i][1],th));
+  if(th>=5){clanGoldStorage(group,cx-8,cz+10);clanElixirStorage(group,cx+8,cz+10)}
+  if(th>=8)clanCamp(group,cx-23,cz+6);
+  for(let i=0;i<12;i++){const a=i/12*Math.PI*2,rr=30+((i*7+th*3)%8);clanTree(group,cx+Math.cos(a)*rr,cz+Math.sin(a)*rr,.65+((i+th)%4)*.08)}
+  const sign=makeLabel(`TH ${th}  •  ${th<9?'Early Village':th<12?'Medieval / Fire Era':th===12?'Electric Era':th===13?'Ice Era':th===14?'Jungle Era':th===15?'Magic Era':th===16?'Nature Era':'Justice Era'}`);sign.position.set(cx,3.1,cz+28);sign.scale.set(5.2,1.05,1);group.add(sign);
+}
+function updateClanProgressionRender(force=false){
+  if(state.world!=='clan')return;const anchor=state.playing?state.pos:camera.position;
+  const current=clamp(Math.round(-anchor.z/CLAN_TH_SPACING)+1,1,CLAN_TH_COUNT),key=`th:${current}`;if(!force&&key===state.clanRenderKey)return;state.clanRenderKey=key;clearGroup(streamGroup);
+  const lo=Math.max(1,current-1),hi=Math.min(CLAN_TH_COUNT,current+2);for(let th=lo;th<=hi;th++)renderClanVillage(streamGroup,th,0,-(th-1)*CLAN_TH_SPACING);
+}
+
 function seeded01(a,b,c=0){const v=Math.sin(a*127.1+b*311.7+c*74.7)*43758.5453;return v-Math.floor(v)}
 function addIconBillboard(group,x,y,z,fill){const wrap=new THREE.Group();const bubble=new THREE.Mesh(new THREE.PlaneGeometry(2.4,2.4),new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide}));bubble.position.y=.2;wrap.add(bubble);const icon=new THREE.Mesh(new THREE.CircleGeometry(.55,18),new THREE.MeshBasicMaterial({color:fill,side:THREE.DoubleSide}));icon.position.set(0,.2,.01);wrap.add(icon);wrap.position.set(x,y,z);wrap.userData.billboard=true;wrap.lookAt(camera.position);group.add(wrap);return wrap}
 function addStreamChunk(theme,cx,cz,span){
@@ -357,7 +471,7 @@ function addStreamChunk(theme,cx,cz,span){
   }
   streamGroup.add(g);
 }
-function updateStreamingWorld(force=false){if(!state.config)return;const world=state.config.worlds[state.world];if(!world||state.world==='voxel')return;const span=56;const anchor=state.playing?state.pos:camera.position;const cx=Math.floor(anchor.x/span),cz=Math.floor(anchor.z/span);const key=`${state.world}:${cx}:${cz}`;if(!force&&key===state.streamChunk)return;state.streamChunk=key;clearGroup(streamGroup);for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)addStreamChunk(world.theme,cx+dx,cz+dz,span)}
+function updateStreamingWorld(force=false){if(!state.config)return;const world=state.config.worlds[state.world];if(!world||state.world==='voxel')return;if(world.theme==='clan'){updateClanProgressionRender(force);return}const span=56;const anchor=state.playing?state.pos:camera.position;const cx=Math.floor(anchor.x/span),cz=Math.floor(anchor.z/span);const key=`${state.world}:${cx}:${cz}`;if(!force&&key===state.streamChunk)return;state.streamChunk=key;clearGroup(streamGroup);for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)addStreamChunk(world.theme,cx+dx,cz+dz,span)}
 
 function createWeapon(){
   if(!camera||!state.config)return;if(weaponGroup)camera.remove(weaponGroup);weaponGroup=new THREE.Group();camera.add(weaponGroup);scene.add(camera);
@@ -478,7 +592,31 @@ function updateScoreboard(players){const rows=[...players].sort((a,b)=>b.score-a
 function updateHardpoint(i){const hp=state.config.worlds[state.world].hardpoints[i]||state.config.worlds[state.world].hardpoints[0];hardpointMesh.position.set(hp[0],.04,hp[2]);hardpointMesh.visible=true;const d=Math.hypot(state.pos.x-hp[0],state.pos.z-hp[2]);$('#hardpoint').classList.toggle('hidden',d>8)}
 
 function syncBlocks(blocks){state.dynamicBlocks.clear();for(const b of blocks)state.dynamicBlocks.set(b.key,b);rebuildVoxelRender(true);rebuildColliders()}
-function rebuildVoxelRender(force=false){if(state.world!=='voxel')return;const anchor=state.playing?state.pos:camera.position,rx=Math.floor(anchor.x/16),rz=Math.floor(anchor.z/16),key=`${rx}:${rz}:${state.dynamicBlocks.size}`;if(!force&&key===state.voxelRenderKey)return;state.voxelRenderKey=key;clearGroup(dynamicGroup);const groups=new Map();for(const b of state.dynamicBlocks.values()){if(Math.abs(b.x-anchor.x)>VOXEL_RENDER_RADIUS||Math.abs(b.z-anchor.z)>VOXEL_RENDER_RADIUS||Math.abs(b.y-(state.playing?state.pos.y:8))>34)continue;const gk=`${b.type}:${b.powered?1:0}`;if(!groups.has(gk))groups.set(gk,{type:b.type,powered:!!b.powered,blocks:[]});groups.get(gk).blocks.push(b)}const matrix=new THREE.Matrix4();for(const group of groups.values()){const {type,powered,blocks}=group,mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(2,2,2),voxelMaterial(type,powered),blocks.length);mesh.userData.blockKeys=[];for(let i=0;i<blocks.length;i++){const b=blocks[i];matrix.makeTranslation(b.x,b.y,b.z);mesh.setMatrixAt(i,matrix);mesh.userData.blockKeys[i]=b.key}mesh.instanceMatrix.needsUpdate=true;dynamicGroup.add(mesh)}}
+function voxelBlockExposed(b){
+  const n=[[2,0,0],[-2,0,0],[0,2,0],[0,-2,0],[0,0,2],[0,0,-2]];
+  for(const [dx,dy,dz] of n)if(!state.dynamicBlocks.has(`${b.x+dx}:${b.y+dy}:${b.z+dz}`))return true;return false;
+}
+function rebuildVoxelRender(force=false){
+  if(state.world!=='voxel')return;const anchor=state.playing?state.pos:camera.position,rx=Math.floor(anchor.x/20),rz=Math.floor(anchor.z/20),key=`${rx}:${rz}:${state.dynamicBlocks.size}`;if(!force&&key===state.voxelRenderKey)return;state.voxelRenderKey=key;clearGroup(dynamicGroup);
+  const groups=new Map();for(const b of state.dynamicBlocks.values()){
+    if(Math.abs(b.x-anchor.x)>VOXEL_RENDER_RADIUS||Math.abs(b.z-anchor.z)>VOXEL_RENDER_RADIUS||Math.abs(b.y-(state.playing?state.pos.y:8))>42)continue;
+    if(!voxelBlockExposed(b)&&!['redstone','lamp','lever','glass'].includes(b.type))continue;
+    const gk=`${b.type}:${b.powered?1:0}`;if(!groups.has(gk))groups.set(gk,{type:b.type,powered:!!b.powered,blocks:[]});groups.get(gk).blocks.push(b)
+  }
+  const matrix=new THREE.Matrix4();for(const group of groups.values()){
+    const {type,powered,blocks}=group,mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(2,2,2),voxelMaterial(type,powered),blocks.length);mesh.userData.blockKeys=[];mesh.frustumCulled=true;
+    for(let i=0;i<blocks.length;i++){const b=blocks[i];matrix.makeTranslation(b.x,b.y,b.z);mesh.setMatrixAt(i,matrix);mesh.userData.blockKeys[i]=b.key}mesh.instanceMatrix.needsUpdate=true;dynamicGroup.add(mesh)
+  }
+}
+function voxelSurfaceHeight(x,z){const n=Math.sin((x+11)*.11)+Math.cos((z-7)*.10)+.7*Math.sin((x+z)*.045)+.35*Math.cos((x-z)*.06);const layers=clamp(Math.round(4+n*1.3),2,7);return 1+(layers-1)*2}
+function rebuildVoxelHorizon(force=false){
+  if(state.world!=='voxel')return;const anchor=state.playing?state.pos:camera.position,cx=Math.floor(anchor.x/32),cz=Math.floor(anchor.z/32),key=`${cx}:${cz}:${state.dynamicBlocks.size}`;if(!force&&key===state.voxelHorizonKey)return;state.voxelHorizonKey=key;clearGroup(streamGroup);
+  const realColumns=new Set();for(const b of state.dynamicBlocks.values())realColumns.add(`${b.x}:${b.z}`);
+  const positions=[];const startX=Math.floor((anchor.x-VOXEL_HORIZON_RADIUS)/VOXEL_HORIZON_STEP)*VOXEL_HORIZON_STEP,endX=anchor.x+VOXEL_HORIZON_RADIUS,startZ=Math.floor((anchor.z-VOXEL_HORIZON_RADIUS)/VOXEL_HORIZON_STEP)*VOXEL_HORIZON_STEP,endZ=anchor.z+VOXEL_HORIZON_RADIUS;
+  for(let x=startX;x<=endX;x+=VOXEL_HORIZON_STEP)for(let z=startZ;z<=endZ;z+=VOXEL_HORIZON_STEP){const dx=x-anchor.x,dz=z-anchor.z;if(dx*dx+dz*dz>VOXEL_HORIZON_RADIUS*VOXEL_HORIZON_RADIUS)continue;let hasReal=false;for(const ox of [0,2])for(const oz of [0,2])if(realColumns.has(`${x+ox}:${z+oz}`))hasReal=true;if(hasReal)continue;positions.push([x,voxelSurfaceHeight(x,z),z])}
+  const geo=new THREE.BoxGeometry(VOXEL_HORIZON_STEP,2,VOXEL_HORIZON_STEP),mat=voxelMaterial('grass'),mesh=new THREE.InstancedMesh(geo,mat,positions.length),matrix=new THREE.Matrix4();mesh.frustumCulled=true;for(let i=0;i<positions.length;i++){const [x,y,z]=positions[i];matrix.makeTranslation(x,y,z);mesh.setMatrixAt(i,matrix)}mesh.instanceMatrix.needsUpdate=true;streamGroup.add(mesh);
+}
+
 
 function rebuildColliders(){const w=state.config.worlds[state.world];state.currentBoxes=[...w.boxes]}
 function blockRay(){raycaster.setFromCamera(new THREE.Vector2(0,0),camera);raycaster.far=9;const hits=raycaster.intersectObjects(dynamicGroup.children,false);if(!hits.length)return null;const hit=hits[0],keys=hit.object.userData.blockKeys||[],key=keys[hit.instanceId];if(!key)return null;hit.block=state.dynamicBlocks.get(key);hit.blockKey=key;return hit}
@@ -551,7 +689,7 @@ function updateDayNight(){
 
 let netAcc=0,menuCamT=0,frameCount=0,fpsAcc=0;
 function animate(){
-  requestAnimationFrame(animate);const dt=Math.min(.033,clock?clock.getDelta():.016);frameCount++;fpsAcc+=dt;if(fpsAcc>1){$('#menuFps').textContent=`${Math.round(frameCount/fpsAcc)} FPS`;frameCount=0;fpsAcc=0}updateDayNight();updateStreamingWorld();rebuildVoxelRender();updateCleanerBots(dt);updateMilanProjectiles(dt);if(stormRing)stormRing.rotation.y+=dt*.08;
+  requestAnimationFrame(animate);const dt=Math.min(.033,clock?clock.getDelta():.016);frameCount++;fpsAcc+=dt;if(fpsAcc>1){$('#menuFps').textContent=`${Math.round(frameCount/fpsAcc)} FPS`;frameCount=0;fpsAcc=0}updateDayNight();updateStreamingWorld();rebuildVoxelRender();rebuildVoxelHorizon();updateCleanerBots(dt);updateMilanProjectiles(dt);if(stormRing)stormRing.rotation.y+=dt*.08;
   if(state.playing){physics(dt);camera.position.set(state.pos.x,state.pos.y+(state.world==='voxel'?(state.crouched?2.90:3.24):(state.crouched?1.18:1.62)),state.pos.z);camera.rotation.set(state.pitch,state.yaw,0);const targetFov=state.ads&&!state.buildMode?Math.max(48,state.settings.fov*.68):state.settings.fov;camera.fov=lerp(camera.fov,targetFov,1-Math.pow(.001,dt));camera.updateProjectionMatrix();const sp=Math.hypot(state.vel.x,state.vel.z),bob=state.settings.bob&&state.grounded?Math.sin(performance.now()*.015)*Math.min(.014,sp*.0013):0;const adsX=state.ads&&!state.buildMode?-.32:.05,adsY=state.ads&&!state.buildMode?.02:-.02;if(weaponGroup){weaponGroup.position.x=lerp(weaponGroup.position.x,adsX,dt*12);weaponGroup.position.y=lerp(weaponGroup.position.y,adsY+bob,dt*12);weaponGroup.position.z=lerp(weaponGroup.position.z,0,dt*18);weaponGroup.rotation.x=lerp(weaponGroup.rotation.x,0,dt*16)}$('#crosshair').style.opacity=state.ads&&!state.buildMode?.28:1;netAcc+=dt;if(netAcc>.05){netAcc=0;wsSend({t:'state',x:state.pos.x,y:state.pos.y,z:state.pos.z,yaw:state.yaw,pitch:state.pitch,vx:state.vel.x,vy:state.vel.y,vz:state.vel.z})}if(state.mouseDown)shoot();
   }else{menuCamT+=dt*.13;const radius=state.world==='stadium'?25:16;camera.position.set(Math.sin(menuCamT)*radius,6+Math.sin(menuCamT*.55)*1.2,Math.cos(menuCamT)*radius);camera.lookAt(0,2,0);if(weaponGroup)weaponGroup.position.set(.05,-.02,0)}
   for(const r of state.remote.values()){r.group.position.lerp(r.target,1-Math.pow(.0008,dt));r.group.rotation.y=r.yaw}for(const r of state.mobs.values())r.group.position.lerp(r.target,1-Math.pow(.001,dt));for(const g of decorGroup.children){if(g.userData&&g.userData.billboard)g.lookAt(camera.position)}renderer.render(scene,camera);
