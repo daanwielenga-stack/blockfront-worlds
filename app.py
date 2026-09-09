@@ -21,7 +21,7 @@ STATIC = ROOT / "static"
 
 logger = logging.getLogger("blockfront")
 
-app = FastAPI(title="Blockfront Worlds", version="2.1.0")
+app = FastAPI(title="Blockfront Worlds", version="2.2.0")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
@@ -49,6 +49,18 @@ CLASSES = {
     "Agent": {"weapon": "Dual Uzis", "hp": 100, "speed": 1.10, "damage": 15, "rpm": 960, "mag": 36, "reload": 1.28, "spread": 0.020, "range": 48, "wall_jump": True, "color": "#00b4d8"},
     "Runner": {"weapon": "Combat Blade", "hp": 120, "speed": 1.22, "damage": 100, "rpm": 130, "mag": 1, "reload": 0.35, "spread": 0.0, "range": 3.0, "wall_jump": True, "melee": True, "color": "#e9ecef"},
 }
+
+# Player-selectable guns. Classes now control movement/health while the gun can be
+# chosen independently from the loadout menu.
+WEAPONS = {
+    "Assault Rifle": {"damage": 27, "rpm": 650, "mag": 30, "reload": 1.35, "spread": 0.006, "range": 85, "head_multiplier": 1.5, "color": "#f2c14e"},
+    "Sniper Rifle": {"damage": 105, "rpm": 55, "mag": 3, "reload": 1.65, "spread": 0.0015, "range": 150, "head_multiplier": 1.5, "color": "#9b8cff"},
+    "Shotgun": {"damage": 16, "rpm": 115, "mag": 5, "reload": 1.70, "spread": 0.065, "range": 24, "pellets": 7, "head_multiplier": 1.25, "color": "#ff7b54"},
+    "Machine Gun": {"damage": 22, "rpm": 720, "mag": 60, "reload": 2.20, "spread": 0.013, "range": 82, "head_multiplier": 1.4, "color": "#ef476f"},
+    "Milan Gun": {"damage": 0, "rpm": 170, "mag": 12, "reload": 1.10, "spread": 0.010, "range": 55, "head_multiplier": 1.0, "nonlethal": True, "color": "#67d7ff"},
+}
+DEFAULT_WEAPON = "Assault Rifle"
+
 
 
 def box(x, y, z, w, h, d, c="#666666", tag="solid", removable=False):
@@ -319,6 +331,7 @@ class Player:
     x: float
     y: float
     z: float
+    weapon: str = DEFAULT_WEAPON
     yaw: float = 0
     pitch: float = 0
     vx: float = 0
@@ -697,7 +710,7 @@ async def terms():
 async def health():
     return {
         "ok": True,
-        "version": "2.1.0",
+        "version": "2.2.0",
         "rooms": len(rooms),
         "players": sum(len(r.players) for r in rooms.values()),
     }
@@ -705,12 +718,12 @@ async def health():
 
 @app.get("/api/config")
 async def config():
-    return JSONResponse({"classes": CLASSES, "worlds": public_worlds(), "world_order": WORLD_ORDER, "modes": sorted(MODES)})
+    return JSONResponse({"classes": CLASSES, "weapons": WEAPONS, "worlds": public_worlds(), "world_order": WORLD_ORDER, "modes": sorted(MODES)})
 
 
 @app.get("/api/site-config")
 async def site_config():
-    return JSONResponse({"ads": ad_config(), "version": "2.1.0", "brand": "Blockfront Worlds"})
+    return JSONResponse({"ads": ad_config(), "version": "2.2.0", "brand": "Blockfront Worlds"})
 
 
 @app.get("/api/rooms")
@@ -738,6 +751,9 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
     klass = qp.get("klass") or "Triggerman"
     if klass not in CLASSES:
         klass = "Triggerman"
+    weapon = qp.get("weapon") or DEFAULT_WEAPON
+    if weapon not in WEAPONS:
+        weapon = DEFAULT_WEAPON
     mode = (qp.get("mode") or "FFA").upper()
     world = (qp.get("world") or "classic").lower()
     room = get_room(room_code, mode, world)
@@ -748,7 +764,7 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
     pid = uid()
     team = choose_team(room) if room.mode != "FFA" else "Solo"
     sx, sy, sz = random.choice(room.world_cfg["spawns"])
-    p = Player(pid, name, klass, team, sx, sy, sz, hp=CLASSES[klass]["hp"])
+    p = Player(pid, name, klass, team, sx, sy, sz, weapon=weapon, hp=CLASSES[klass]["hp"])
     room.players[pid] = p
     room.sockets[pid] = ws
     room.spawn(p)
@@ -795,6 +811,13 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                     await ws.send_json({"t": "respawn", "player": p.public()})
                     await room.emit({"t": "event", "kind": "class", "text": f"{p.name} switched to {k}"})
 
+            elif t == "weapon":
+                selected = str(msg.get("weapon", DEFAULT_WEAPON))
+                if selected in WEAPONS:
+                    p.weapon = selected
+                    await ws.send_json({"t": "weapon", "weapon": p.weapon})
+                    await room.emit({"t": "event", "kind": "weapon", "text": f"{p.name} equipped {p.weapon}"})
+
             elif t == "respawn":
                 if not p.alive and time.time() >= p.respawn_at:
                     room.spawn(p)
@@ -818,7 +841,7 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                 b = room.blocks.get(key)
                 if not b:
                     continue
-                if math.dist((p.x, p.y + 1.2, p.z), (b.x, b.y, b.z)) > 7.0:
+                if math.dist((p.x, p.y + 3.0, p.z), (b.x, b.y, b.z)) > 8.0:
                     continue
                 # Protect the demo lever/lamp circuit from being instantly erased
                 # only if it was seeded by the world; every other block is mineable.
@@ -843,7 +866,7 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                 y = int(round((raw_pos[1] - 1) / 2) * 2 + 1)
                 y = int(clamp(y, VOXEL_MIN_Y, VOXEL_MAX_Y))
                 room.ensure_voxel_area(x, z, VOXEL_CHUNK_RADIUS)
-                if math.dist((p.x, p.y + 1.2, p.z), (x, y, z)) > 7.2:
+                if math.dist((p.x, p.y + 3.0, p.z), (x, y, z)) > 8.2:
                     continue
                 key = f"{x}:{y}:{z}"
                 if key in room.blocks or len(room.blocks) >= 12000:
@@ -858,13 +881,13 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
             elif t == "block_use" and p.alive and room.world == "voxel":
                 key = str(msg.get("key", ""))
                 b = room.blocks.get(key)
-                if b and b.type == "lever" and math.dist((p.x, p.y + 1.2, p.z), (b.x, b.y, b.z)) <= 6.0:
+                if b and b.type == "lever" and math.dist((p.x, p.y + 3.0, p.z), (b.x, b.y, b.z)) <= 7.0:
                     b.powered = not b.powered
                     room.recompute_power()
                     await room.emit_blocks()
 
             elif t == "fire" and p.alive:
-                cfg = CLASSES[p.klass]
+                cfg = WEAPONS.get(p.weapon, WEAPONS[DEFAULT_WEAPON])
                 now = time.time()
                 min_interval = 60.0 / cfg["rpm"]
                 if now - p.last_fire < min_interval * 0.72:
@@ -873,6 +896,10 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                 origin = tuple(float(v) for v in msg.get("o", [p.x, p.y + 1.4, p.z])[:3])
                 direction = norm(tuple(float(v) for v in msg.get("d", [0, 0, -1])[:3]))
                 if math.dist(origin, (p.x, p.y + 1.4, p.z)) > 3.0:
+                    continue
+                if cfg.get("nonlethal"):
+                    digit = random.choice(["6", "7"])
+                    await room.emit({"t": "milan", "shooter": p.id, "name": p.name, "digit": digit, "o": list(origin), "d": list(direction)})
                     continue
                 pellets = int(cfg.get("pellets", 1))
                 player_hits: Dict[str, int] = {}
@@ -893,10 +920,14 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                             continue
                         if room.mode != "FFA" and q.team == p.team:
                             continue
-                        for ht, is_head in [
+                        hit_spheres = [
+                            (ray_sphere(origin, d, (q.x, q.y + 1.8, q.z), .78), False),
+                            (ray_sphere(origin, d, (q.x, q.y + 3.2, q.z), .46), True),
+                        ] if room.world == "voxel" else [
                             (ray_sphere(origin, d, (q.x, q.y + .9, q.z), .56), False),
                             (ray_sphere(origin, d, (q.x, q.y + 1.55, q.z), .35), True),
-                        ]:
+                        ]
+                        for ht, is_head in hit_spheres:
                             if ht is not None and ht <= wall_t and ht <= cfg["range"] and (best is None or ht < best[0]):
                                 best = (ht, "player", q, is_head)
                     if room.world == "voxel":
@@ -908,8 +939,8 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                                 best = (mt, "mob", m, False)
                     if best:
                         distance, kind, target, is_head = best
-                        damage = cfg["damage"] * (1.5 if is_head else 1.0)
-                        if cfg["range"] > 25 and distance > cfg["range"] * .60 and p.klass not in {"Hunter", "Detective", "Marksman"}:
+                        damage = cfg["damage"] * (cfg.get("head_multiplier", 1.5) if is_head else 1.0)
+                        if cfg["range"] > 25 and distance > cfg["range"] * .60 and p.weapon not in {"Sniper Rifle"}:
                             damage *= .78
                         amount = int(round(damage))
                         if kind == "player":
@@ -933,7 +964,7 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                         p.score += 100
                         if room.mode != "FFA":
                             room.team_scores[p.team] += 1
-                        await room.emit({"t": "kill", "killer": p.name, "killer_id": p.id, "victim": q.name, "victim_id": q.id, "weapon": cfg["weapon"], "streak": p.streak})
+                        await room.emit({"t": "kill", "killer": p.name, "killer_id": p.id, "victim": q.name, "victim_id": q.id, "weapon": p.weapon, "streak": p.streak})
                 for mid, damage in mob_hits.items():
                     m = room.mobs.get(mid)
                     if not m or not m.alive:

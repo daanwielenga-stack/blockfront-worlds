@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from app import (
     BLOCK_TYPES,
     CLASSES,
+    WEAPONS,
     WORLD_ORDER,
     WORLDS,
     Player,
@@ -22,7 +23,7 @@ def test_health():
     assert r.status_code == 200
     body = r.json()
     assert body['ok'] is True
-    assert body['version'] == '2.1.0'
+    assert body['version'] == '2.2.0'
 
 
 def test_config_contains_five_worlds():
@@ -35,6 +36,9 @@ def test_config_contains_five_worlds():
     assert data['worlds']['voxel']['build'] is True
     assert data['worlds']['voxel']['day_night'] is True
     assert data['worlds']['voxel']['mobs'] is True
+    assert {'Assault Rifle', 'Sniper Rifle', 'Shotgun', 'Machine Gun', 'Milan Gun'} <= set(data['weapons'])
+    assert data['weapons']['Milan Gun']['nonlethal'] is True
+    assert data['weapons']['Milan Gun']['damage'] == 0
     assert data['worlds']['clan']['name'] == 'Clash of Clans'
     assert all(data['worlds'][wid]['infinite'] for wid in data['world_order'])
 
@@ -122,3 +126,11 @@ def test_voxel_spawn_is_above_surface():
     assert p.y >= 8
     top = max(block.y for block in b.blocks.values() if block.x == p.x and block.z == p.z) + 1
     assert p.y >= top
+
+
+def test_weapon_catalog():
+    assert WEAPONS['Sniper Rifle']['damage'] > WEAPONS['Assault Rifle']['damage']
+    assert WEAPONS['Shotgun']['pellets'] == 7
+    assert WEAPONS['Machine Gun']['mag'] >= 50
+    assert WEAPONS['Milan Gun']['damage'] == 0
+    assert WEAPONS['Milan Gun']['nonlethal'] is True

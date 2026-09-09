@@ -22,7 +22,8 @@
     <aside class="left-nav">
       <button id="worldsBtn">🌍 Worlds</button>
       <button id="serversBtn">🌐 Servers</button>
-      <button id="classBtnSide">🎯 Loadout</button>
+      <button id="classBtnSide">🎯 Class</button>
+      <button id="gunBtnSide">🔫 Guns</button>
       <button id="settingsBtn">⚙ Settings</button>
       <a href="/privacy" target="_blank">Privacy</a>
       <a href="/terms" target="_blank">Terms</a>
@@ -45,7 +46,7 @@
       <div class="tiny">LOADOUT</div>
       <div id="className" class="class-name">Triggerman</div>
       <div id="weaponName" class="weapon-name">Assault Rifle</div>
-      <button id="classBtn">CUSTOMIZE</button>
+      <div class="loadout-buttons"><button id="classBtn">CLASS</button><button id="gunBtn">GUN</button></div>
     </aside>
 
     <section class="world-dock" aria-label="World selection">
@@ -67,7 +68,7 @@
       <div id="menuAdContent" class="ad-content">Future ad placement</div>
     </aside>
 
-    <div class="footer-note">Public alpha · original procedural worlds · multiplayer WebSockets · v2</div>
+    <div class="footer-note">Public alpha · original procedural worlds · multiplayer WebSockets · v2.2</div>
   </section>
 
   <div id="hud" class="hidden">
@@ -88,7 +89,7 @@
     <div id="hardpoint" class="hidden">HARDPOINT</div>
     <div id="voxelHud" class="hidden">
       <div id="voxelMode">COMBAT MODE</div>
-      <div class="voxel-help">B build/mining · V cycle block · E use lever · Q sword</div>
+      <div class="voxel-help">WASD move · Space jump · Ctrl sprint · Shift sneak · Left click attack/destroy · Right click use/place · 1–9 hotbar · wheel select · E inventory/guns · Q drop · T chat</div>
       <div id="blockHotbar"></div>
     </div>
     <div id="dayNight" class="hidden"><span id="dayIcon">☀</span><span id="dayLabel">DAY</span></div>
@@ -110,6 +111,11 @@
 
   <div id="classModal" class="modal hidden">
     <div class="panel wide"><button class="close" data-close="classModal">×</button><h2>CHOOSE CLASS</h2><div id="classGrid"></div></div>
+  </div>
+
+
+  <div id="gunModal" class="modal hidden">
+    <div class="panel wide"><button class="close" data-close="gunModal">×</button><h2>CHOOSE GUN</h2><p class="muted">Your class controls movement and health; your gun can be selected independently.</p><div id="gunGrid"></div></div>
   </div>
 
   <div id="worldModal" class="modal hidden">
