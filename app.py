@@ -177,6 +177,11 @@ def clan_world():
         # army camps / collectors / path markers
         box(-34, 1.0, 12, 7, 2.0, 7, "#8b6c4f", "camp"), box(34, 1.0, -12, 7, 2.0, 7, "#8b6c4f", "camp"),
         box(-34, 1.0, -12, 6, 2.0, 6, "#b98945", "collector"), box(34, 1.0, 12, 6, 2.0, 6, "#a757d6", "collector"),
+        # extra familiar village silhouettes: mortar, barracks, clan castle and wizard towers
+        box(-16, 1.4, 0, 6, 2.8, 6, "#5b5e63", "mortar"), box(16, 1.4, 0, 6, 2.8, 6, "#5b5e63", "mortar"),
+        box(0, 2.0, -16, 7, 4.0, 7, "#8d5b42", "barracks"), box(0, 2.0, 16, 7, 4.0, 7, "#8d5b42", "barracks"),
+        box(-8, 2.4, 8, 7, 4.8, 7, "#6f7784", "clancastle"), box(8, 2.4, -8, 7, 4.8, 7, "#6f7784", "clancastle"),
+        box(-24, 2.1, 14, 5, 4.2, 5, "#6f4b8e", "wizardtower"), box(24, 2.1, -14, 5, 4.2, 5, "#6f4b8e", "wizardtower"),
         box(0, 0.15, -16, 8, 0.3, 20, "#c4b49b", "path"), box(-16, 0.15, 0, 20, 0.3, 8, "#c4b49b", "path"),
         box(16, 0.15, 0, 20, 0.3, 8, "#c4b49b", "path"), box(0, 0.15, 16, 8, 0.3, 20, "#c4b49b", "path"),
     ]
