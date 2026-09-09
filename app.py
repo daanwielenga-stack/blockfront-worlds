@@ -21,7 +21,7 @@ STATIC = ROOT / "static"
 
 logger = logging.getLogger("blockfront")
 
-app = FastAPI(title="Blockfront Worlds", version="2.0.0")
+app = FastAPI(title="Blockfront Worlds", version="2.1.0")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
@@ -78,37 +78,30 @@ def classic_world():
         "boxes": boxes,
         "spawns": [(-33, 0, -32), (33, 0, 32), (-33, 0, 32), (33, 0, -32), (-8, 0, -31), (8, 0, 31), (-31, 0, 7), (31, 0, -8)],
         "hardpoints": [(-8, 0, -8), (21, 0, 2), (-20, 0, 4), (0, 0, 25)],
-        "bounds": [-39, 39, -39, 39], "ground": "#71915c", "sky": "#78c8ec", "fog": "#78c8ec",
-        "build": False, "day_night": False, "mobs": False,
+        "bounds": [-200000, 200000, -200000, 200000], "ground": "#71915c", "sky": "#78c8ec", "fog": "#78c8ec",
+        "build": False, "day_night": False, "mobs": False, "infinite": True,
     }
 
 
 def voxel_world():
     boxes = [
-        # Boundary cliffs and raised terrain terraces.
-        box(0, 3, -33, 68, 6, 2, "#6a4a2e", "voxel"), box(0, 3, 33, 68, 6, 2, "#6a4a2e", "voxel"),
-        box(-33, 3, 0, 2, 6, 68, "#6a4a2e", "voxel"), box(33, 3, 0, 2, 6, 68, "#6a4a2e", "voxel"),
-        box(-22, 1, -18, 12, 2, 12, "#7db24b", "grass"), box(-22, 2, -18, 8, 2, 8, "#7db24b", "grass"),
-        box(20, 1, 18, 13, 2, 12, "#7db24b", "grass"), box(20, 2, 18, 9, 2, 8, "#7db24b", "grass"),
-        box(16, 1, -18, 10, 2, 8, "#8a6a43", "dirt"), box(-17, 1, 18, 9, 2, 11, "#8a6a43", "dirt"),
-        # Mine entrance and tunnel walls.
+        # Central handcrafted landmarks; the wider terrain now streams outward through
+        # procedural chunk generation so the world can continue effectively forever.
         box(-3, 2, -24, 2, 4, 10, "#777777", "stone"), box(5, 2, -24, 2, 4, 10, "#777777", "stone"),
         box(1, 4.5, -24, 10, 1, 10, "#676767", "stone"),
-        # River banks / bridges.
         box(-8, .6, 3, 18, 1.2, 3, "#9b7042", "wood"), box(13, .6, -2, 12, 1.2, 3, "#9b7042", "wood"),
-        # Small block house.
         box(23, 2, -21, 10, 4, 1, "#a97848", "wood"), box(23, 2, -13, 10, 4, 1, "#a97848", "wood"),
         box(18.5, 2, -17, 1, 4, 9, "#a97848", "wood"), box(27.5, 2, -17, 1, 4, 9, "#a97848", "wood"),
         box(23, 4.5, -17, 10, 1, 9, "#7e5632", "wood"),
     ]
     return {
         "id": "voxel", "name": "Voxel Frontier", "short": "Voxel", "theme": "voxel",
-        "description": "Voxel survival meets arena FPS: mine, build, power lamps, fight mobs and keep fragging.",
+        "description": "Infinite voxel survival meets arena FPS: mine anywhere, dig underground, build, power lamps and fight mobs.",
         "boxes": boxes,
-        "spawns": [(-27, 0, -27), (27, 0, 27), (-27, 0, 27), (27, 0, -27), (0, 0, 25), (0, 0, -12), (-25, 0, 0), (25, 0, 2)],
-        "hardpoints": [(-15, 0, -15), (16, 0, 14), (0, 0, -6), (0, 0, 21)],
-        "bounds": [-32, 32, -32, 32], "ground": "#75a84b", "sky": "#7ec8ff", "fog": "#9ed6ff",
-        "build": True, "day_night": True, "mobs": True, "grid": 2,
+        "spawns": [(-27, 5, -27), (27, 5, 27), (-27, 5, 27), (27, 5, -27), (0, 5, 25), (0, 5, -12), (-25, 5, 0), (25, 5, 2)],
+        "hardpoints": [(-15, 5, -15), (16, 5, 14), (0, 5, -6), (0, 5, 21)],
+        "bounds": [-200000, 200000, -200000, 200000], "ground": "#75a84b", "sky": "#7ec8ff", "fog": "#9ed6ff",
+        "build": True, "day_night": True, "mobs": True, "grid": 2, "infinite": True,
     }
 
 
@@ -131,8 +124,8 @@ def stadium_world():
         "boxes": boxes,
         "spawns": [(-31, 0, -20), (31, 0, 20), (-31, 0, 20), (31, 0, -20), (-18, 0, 0), (18, 0, 0), (0, 0, -24), (0, 0, 24)],
         "hardpoints": [(0, 0, 0), (-25, 0, 0), (25, 0, 0), (0, 0, 20)],
-        "bounds": [-37, 37, -29, 29], "ground": "#2e8b57", "sky": "#89c7ff", "fog": "#89c7ff",
-        "build": False, "day_night": False, "mobs": False,
+        "bounds": [-200000, 200000, -200000, 200000], "ground": "#2e8b57", "sky": "#89c7ff", "fog": "#89c7ff",
+        "build": False, "day_night": False, "mobs": False, "infinite": True,
     }
 
 
@@ -155,35 +148,32 @@ def battle_world():
         "boxes": boxes,
         "spawns": [(-33, 0, -33), (33, 0, 33), (-33, 0, 33), (33, 0, -33), (-8, 0, -31), (8, 0, 31), (-31, 0, 8), (31, 0, -8)],
         "hardpoints": [(0, 0, 0), (-22, 0, 9), (23, 0, -8), (0, 0, 26)],
-        "bounds": [-39, 39, -39, 39], "ground": "#63b75d", "sky": "#7dc7ff", "fog": "#a6d9ff",
-        "build": False, "day_night": False, "mobs": False,
+        "bounds": [-200000, 200000, -200000, 200000], "ground": "#63b75d", "sky": "#7dc7ff", "fog": "#a6d9ff",
+        "build": False, "day_night": False, "mobs": False, "infinite": True,
     }
 
 
 def clan_world():
     boxes = [
-        box(0, 2.5, -40, 82, 5, 2, "#5b493a", "boundary"), box(0, 2.5, 40, 82, 5, 2, "#5b493a", "boundary"),
-        box(-40, 2.5, 0, 2, 5, 82, "#5b493a", "boundary"), box(40, 2.5, 0, 2, 5, 82, "#5b493a", "boundary"),
-        # Village walls in rings with openings.
-        box(0, 1.1, -18, 28, 2.2, 2, "#c9b79c", "clanwall"), box(0, 1.1, 18, 28, 2.2, 2, "#c9b79c", "clanwall"),
-        box(-18, 1.1, -8, 2, 2.2, 20, "#c9b79c", "clanwall"), box(-18, 1.1, 10, 2, 2.2, 12, "#c9b79c", "clanwall"),
-        box(18, 1.1, -10, 2, 2.2, 12, "#c9b79c", "clanwall"), box(18, 1.1, 8, 2, 2.2, 20, "#c9b79c", "clanwall"),
-        # Central keep and resource buildings.
-        box(0, 3.5, 0, 10, 7, 10, "#8d6e63", "keep"), box(-26, 2.4, -22, 8, 4.8, 8, "#b65b4b", "hut"),
-        box(26, 2.4, 22, 8, 4.8, 8, "#b65b4b", "hut"), box(25, 2.5, -22, 7, 5, 7, "#d4a647", "storage"),
-        box(-25, 2.5, 22, 7, 5, 7, "#7e57c2", "storage"),
-        # Towers / cannon plinths.
-        box(-25, 1.2, 0, 5, 2.4, 5, "#6d4c41", "tower"), box(25, 1.2, 0, 5, 2.4, 5, "#6d4c41", "tower"),
-        box(0, 1.2, -27, 5, 2.4, 5, "#6d4c41", "tower"), box(0, 1.2, 27, 5, 2.4, 5, "#6d4c41", "tower"),
+        box(0, 1.1, -18, 28, 2.2, 2, "#8c8f93", "clanwall"), box(0, 1.1, 18, 28, 2.2, 2, "#8c8f93", "clanwall"),
+        box(-18, 1.1, -8, 2, 2.2, 20, "#8c8f93", "clanwall"), box(-18, 1.1, 10, 2, 2.2, 12, "#8c8f93", "clanwall"),
+        box(18, 1.1, -10, 2, 2.2, 12, "#8c8f93", "clanwall"), box(18, 1.1, 8, 2, 2.2, 20, "#8c8f93", "clanwall"),
+        box(0, 3.6, 0, 12, 7.2, 12, "#c1703d", "townhall"), box(0, 7.6, 0, 8, 1.6, 8, "#d98a4c", "roofbase"),
+        box(-24, 2.8, -22, 9, 5.6, 9, "#9e5b3b", "hut"), box(24, 2.8, 22, 9, 5.6, 9, "#9e5b3b", "hut"),
+        box(24, 2.7, -22, 8, 5.4, 8, "#d4a647", "goldstorage"), box(-24, 2.7, 22, 8, 5.4, 8, "#a257d8", "elixirstorage"),
+        box(-26, 1.4, 0, 6, 2.8, 6, "#6d4c41", "tower"), box(26, 1.4, 0, 6, 2.8, 6, "#6d4c41", "tower"),
+        box(0, 1.4, -27, 6, 2.8, 6, "#6d4c41", "tower"), box(0, 1.4, 27, 6, 2.8, 6, "#6d4c41", "tower"),
+        box(-30, 1.2, -10, 6, 2.4, 6, "#8b6c4f", "camp"), box(30, 1.2, 10, 6, 2.4, 6, "#8b6c4f", "camp"),
+        box(-9, 1.0, -25, 5, 2.0, 5, "#74777a", "cannon"), box(9, 1.0, 25, 5, 2.0, 5, "#74777a", "cannon"),
     ]
     return {
-        "id": "clan", "name": "Clan Kingdom", "short": "Clan", "theme": "clan",
-        "description": "A playful 3D raider village of walls, towers, storages and a fortified central keep.",
+        "id": "clan", "name": "Clash of Clans", "short": "Clans", "theme": "clan",
+        "description": "A dense 3D village raid map of walls, towers, storages, camps and a central town hall.",
         "boxes": boxes,
         "spawns": [(-33, 0, -33), (33, 0, 33), (-33, 0, 33), (33, 0, -33), (-29, 0, 7), (29, 0, -7), (-7, 0, -30), (7, 0, 30)],
         "hardpoints": [(0, 0, 0), (-25, 0, 0), (25, 0, 0), (0, 0, 27)],
-        "bounds": [-39, 39, -39, 39], "ground": "#8cc866", "sky": "#87ceeb", "fog": "#bfe8ff",
-        "build": False, "day_night": False, "mobs": False,
+        "bounds": [-200000, 200000, -200000, 200000], "ground": "#8cc866", "sky": "#87ceeb", "fog": "#bfe8ff",
+        "build": False, "day_night": False, "mobs": False, "infinite": True,
     }
 
 
@@ -193,9 +183,14 @@ MODES = {"FFA", "TDM", "HARDPOINT"}
 MAX_PLAYERS_PER_ROOM = int(os.getenv("MAX_PLAYERS_PER_ROOM", "16"))
 BLOCK_TYPES = {"dirt", "stone", "wood", "glass", "redstone", "lamp", "lever"}
 BLOCK_COLORS = {
-    "dirt": "#8a5a32", "stone": "#777777", "wood": "#9b6b3f", "glass": "#9ed7e5",
+    "grass": "#6fb24c", "dirt": "#8a5a32", "stone": "#777777", "wood": "#9b6b3f", "glass": "#9ed7e5",
     "redstone": "#8f1d1d", "lamp": "#d7a632", "lever": "#74604b",
 }
+VOXEL_GRID = 2
+VOXEL_CHUNK_CELLS = 8
+VOXEL_CHUNK_RADIUS = 1
+VOXEL_MIN_Y = -15
+VOXEL_MAX_Y = 31
 
 
 def uid(n: int = 8) -> str:
@@ -257,6 +252,10 @@ def safe_name(raw: str) -> str:
 
 def grid_round(v: float, grid: int = 2) -> int:
     return int(round(v / grid) * grid)
+
+
+def chunk_coord(v: float, span: int) -> int:
+    return math.floor(v / span)
 
 
 @dataclass
@@ -334,6 +333,7 @@ class Room:
     sockets: Dict[str, WebSocket] = field(default_factory=dict)
     blocks: Dict[str, Block] = field(default_factory=dict)
     mobs: Dict[str, Mob] = field(default_factory=dict)
+    generated_chunks: set = field(default_factory=set)
     started_at: float = field(default_factory=time.time)
     created_at: float = field(default_factory=time.time)
     match_length: float = 240.0
@@ -346,7 +346,7 @@ class Room:
 
     def __post_init__(self):
         if self.world == "voxel" and not self.blocks:
-            self.seed_voxel_blocks()
+            self.seed_voxel_world()
             self.seed_mobs()
 
     @property
@@ -362,24 +362,74 @@ class Room:
         # 120-second day/night cycle. 0 = sunrise, .5 = sunset.
         return ((time.time() - self.created_at) % 120.0) / 120.0
 
-    def seed_voxel_blocks(self):
-        # Deterministic-ish resource clusters and redstone demo near the center.
-        rng = random.Random(f"blockfront:{self.code}")
-        for _ in range(64):
-            x = rng.randrange(-28, 29, 2)
-            z = rng.randrange(-28, 29, 2)
-            y = 1
-            if abs(x) < 5 and abs(z) < 5:
-                continue
-            typ = rng.choice(["dirt", "dirt", "stone", "stone", "wood"])
-            self.add_block(x, y, z, typ, "world")
-            if rng.random() < .16:
-                self.add_block(x, 3, z, typ, "world")
-        # Small working redstone-style circuit: lever -> wire -> lamp.
+    def seed_voxel_world(self):
+        self.ensure_voxel_area(0, 0, VOXEL_CHUNK_RADIUS)
+        self.seed_redstone_demo()
+
+    def column_surface_y(self, x: int, z: int) -> int:
+        ys = [b.y for b in self.blocks.values() if b.x == x and b.z == z]
+        return max(ys) if ys else -1
+
+    def seed_redstone_demo(self):
+        base_y = self.column_surface_y(-6, 8)
+        demo_y = max(1, base_y + 2)
+        for x in (-6, -4, -2, 0, 2, 4):
+            self.blocks.pop(f"{x}:{demo_y}:{8}", None)
         for x in (-4, -2, 0, 2):
-            self.add_block(x, 1, 8, "redstone", "world")
-        self.add_block(-6, 1, 8, "lever", "world")
-        self.add_block(4, 1, 8, "lamp", "world")
+            self.add_block(x, demo_y, 8, "redstone", "world")
+        self.add_block(-6, demo_y, 8, "lever", "world")
+        self.add_block(4, demo_y, 8, "lamp", "world")
+
+    def ensure_voxel_area(self, x: float, z: float, radius: int = VOXEL_CHUNK_RADIUS):
+        span = VOXEL_CHUNK_CELLS * VOXEL_GRID
+        cx = chunk_coord(x, span)
+        cz = chunk_coord(z, span)
+        created = False
+        for dx in range(-radius, radius + 1):
+            for dz in range(-radius, radius + 1):
+                key = (cx + dx, cz + dz)
+                if key not in self.generated_chunks:
+                    self.generate_voxel_chunk(*key)
+                    self.generated_chunks.add(key)
+                    created = True
+        return created
+
+    def generate_voxel_chunk(self, cx: int, cz: int):
+        for lx in range(VOXEL_CHUNK_CELLS):
+            for lz in range(VOXEL_CHUNK_CELLS):
+                wx = (cx * VOXEL_CHUNK_CELLS + lx) * VOXEL_GRID
+                wz = (cz * VOXEL_CHUNK_CELLS + lz) * VOXEL_GRID
+                n = (
+                    math.sin((wx + 11) * 0.11)
+                    + math.cos((wz - 7) * 0.10)
+                    + 0.7 * math.sin((wx + wz) * 0.045)
+                    + 0.35 * math.cos((wx - wz) * 0.06)
+                )
+                layers = int(clamp(round(4 + n * 1.3), 2, 7))
+                bottom_index = -4
+                for idx in range(bottom_index, layers):
+                    y = 1 + idx * 2
+                    cave_score = math.sin(wx * 0.18 + y * 0.55) + math.cos(wz * 0.22 - y * 0.41)
+                    if idx < layers - 1 and idx > bottom_index and cave_score > 1.1:
+                        continue
+                    key = f"{wx}:{y}:{wz}"
+                    if key in self.blocks:
+                        continue
+                    typ = "stone" if idx < layers - 2 else "dirt"
+                    if idx == layers - 1:
+                        typ = "grass"
+                    self.blocks[key] = Block(key, wx, y, wz, typ, "world")
+                tree_score = math.sin(wx * 0.27) + math.cos(wz * 0.23)
+                if layers >= 4 and abs(wx) + abs(wz) > 8 and tree_score > 1.25:
+                    top = 1 + (layers - 1) * 2
+                    for oy in (2, 4, 6):
+                        self.add_block(wx, top + oy, wz, "wood", "world")
+                    leaf_y = top + 8
+                    for dx2 in (-2, 0, 2):
+                        for dz2 in (-2, 0, 2):
+                            if abs(dx2) + abs(dz2) <= 2:
+                                self.add_block(wx + dx2, leaf_y, wz + dz2, "grass", "world")
+                    self.add_block(wx, leaf_y + 2, wz, "grass", "world")
 
     def seed_mobs(self):
         for kind, pos in [
@@ -601,7 +651,7 @@ async def terms():
 async def health():
     return {
         "ok": True,
-        "version": "2.0.0",
+        "version": "2.1.0",
         "rooms": len(rooms),
         "players": sum(len(r.players) for r in rooms.values()),
     }
@@ -614,7 +664,7 @@ async def config():
 
 @app.get("/api/site-config")
 async def site_config():
-    return JSONResponse({"ads": ad_config(), "version": "2.0.0", "brand": "Blockfront Worlds"})
+    return JSONResponse({"ads": ad_config(), "version": "2.1.0", "brand": "Blockfront Worlds"})
 
 
 @app.get("/api/rooms")
@@ -674,10 +724,17 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
             if t == "state" and p.alive:
                 nx, ny, nz = float(msg.get("x", p.x)), float(msg.get("y", p.y)), float(msg.get("z", p.z))
                 dx, dz = nx - p.x, nz - p.z
+                generated = False
                 if math.hypot(dx, dz) <= 4.5:
                     minx, maxx, minz, maxz = room.world_cfg["bounds"]
                     p.x, p.z = clamp(nx, minx, maxx), clamp(nz, minz, maxz)
-                    p.y = clamp(ny, 0, 18)
+                    if room.world == "voxel":
+                        p.y = clamp(ny, VOXEL_MIN_Y, 40)
+                        generated = room.ensure_voxel_area(p.x, p.z, VOXEL_CHUNK_RADIUS)
+                    else:
+                        p.y = clamp(ny, 0, 24)
+                if generated:
+                    await room.emit_blocks()
                 p.yaw = float(msg.get("yaw", p.yaw))
                 p.pitch = clamp(float(msg.get("pitch", p.pitch)), -1.55, 1.55)
                 p.vx = clamp(float(msg.get("vx", 0)), -30, 30)
@@ -738,14 +795,12 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                 # Voxel block centers sit at y=1,3,5,... so a cube rests flush
                 # on the ground or on the cube below it.
                 y = int(round((raw_pos[1] - 1) / 2) * 2 + 1)
-                y = int(clamp(y, 1, 13))
-                minx, maxx, minz, maxz = room.world_cfg["bounds"]
-                if not (minx + 1 <= x <= maxx - 1 and minz + 1 <= z <= maxz - 1):
-                    continue
+                y = int(clamp(y, VOXEL_MIN_Y, VOXEL_MAX_Y))
+                room.ensure_voxel_area(x, z, VOXEL_CHUNK_RADIUS)
                 if math.dist((p.x, p.y + 1.2, p.z), (x, y, z)) > 7.2:
                     continue
                 key = f"{x}:{y}:{z}"
-                if key in room.blocks or len(room.blocks) >= 360:
+                if key in room.blocks or len(room.blocks) >= 12000:
                     continue
                 # Avoid trapping a player inside a new cube.
                 if any(abs(q.x - x) < 1.25 and abs((q.y + .9) - y) < 1.7 and abs(q.z - z) < 1.25 for q in room.players.values() if q.alive):

@@ -20,7 +20,7 @@ def test_health():
     assert r.status_code == 200
     body = r.json()
     assert body['ok'] is True
-    assert body['version'] == '2.0.0'
+    assert body['version'] == '2.1.0'
 
 
 def test_config_contains_five_worlds():
@@ -33,6 +33,8 @@ def test_config_contains_five_worlds():
     assert data['worlds']['voxel']['build'] is True
     assert data['worlds']['voxel']['day_night'] is True
     assert data['worlds']['voxel']['mobs'] is True
+    assert data['worlds']['clan']['name'] == 'Clash of Clans'
+    assert all(data['worlds'][wid]['infinite'] for wid in data['world_order'])
 
 
 def test_all_worlds_have_gameplay_geometry():
@@ -69,6 +71,7 @@ def test_room_isolated_by_world():
     assert b.world == 'voxel'
     assert b.blocks
     assert b.mobs
+    assert any(block.y < 1 for block in b.blocks.values())
 
 
 def test_voxel_power_network():
