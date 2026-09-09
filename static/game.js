@@ -1660,98 +1660,326 @@ function decorBattle(){
 
 function decorClan(){
 
-  const roofs=[
-    [
-      -26,
-      -22,
-      '#6f2f25'
-    ],
-
-    [
-      26,
-      22,
-      '#6f2f25'
-    ]
-  ];
-
+  // central town hall layered roofs
   for(
-    const [x,z,c] of roofs
+    const [y,s,c] of [
+      [5.8,10.2,0xc8753f],
+      [7.15,7.3,0xdd9448],
+      [8.35,4.6,0xf3a84f]
+    ]
   ){
 
-    const r=
+    const roof=
       new THREE.Mesh(
-
         new THREE.ConeGeometry(
-          6,
-          3,
+          s/2,
+          2.1,
           4
         ),
-
         new THREE.MeshLambertMaterial({
           color:c
         })
       );
 
-    r.position.set(
+    roof.position.set(
+      0,
+      y,
+      0
+    );
+
+    roof.rotation.y=
+      Math.PI/4;
+
+    decorGroup.add(
+      roof
+    );
+  }
+
+  // storage domes and icons
+  for(
+    const [x,z,c,icon] of [
+      [-15,15,0xd253e2,0xd15ae8],
+      [15,-15,0xd253e2,0xd15ae8],
+      [-15,-15,0xffca33,0xffd34f],
+      [15,15,0xffca33,0xffd34f]
+    ]
+  ){
+
+    const orb=
+      new THREE.Mesh(
+        new THREE.SphereGeometry(
+          2.2,
+          18,
+          12
+        ),
+        new THREE.MeshPhongMaterial({
+          color:c,
+          transparent:true,
+          opacity:c===0xd253e2?.84:1
+        })
+      );
+
+    orb.scale.y=.75;
+
+    orb.position.set(
       x,
-      6,
+      5.2,
       z
     );
 
-    r.rotation.y=
-      Math.PI/4;
-
-    decorGroup.add(r);
-  }
-
-  const keepRoof=
-    new THREE.Mesh(
-
-      new THREE.ConeGeometry(
-        7.4,
-        3.4,
-        4
-      ),
-
-      new THREE.MeshLambertMaterial({
-        color:0x4d5f76
-      })
+    decorGroup.add(
+      orb
     );
 
-  keepRoof.position.set(
-    0,
-    8.4,
-    0
-  );
+    addIconBillboard(
+      decorGroup,
+      x,
+      8.8,
+      z,
+      icon
+    );
+  }
 
-  keepRoof.rotation.y=
-    Math.PI/4;
-
-  decorGroup.add(
-    keepRoof
-  );
-
+  // builder huts roofs
   for(
     const [x,z] of [
+      [-30,-24],
+      [30,24],
+      [30,-24],
+      [-30,24]
+    ]
+  ){
 
-      [-25,0],
-      [25,0],
-      [0,-27],
-      [0,27]
+    const roof=
+      new THREE.Mesh(
+        new THREE.ConeGeometry(
+          4.7,
+          2.6,
+          4
+        ),
+        new THREE.MeshLambertMaterial({
+          color:0x6f2f25
+        })
+      );
 
+    roof.position.set(
+      x,
+      5.9,
+      z
+    );
+
+    roof.rotation.y=
+      Math.PI/4;
+
+    decorGroup.add(
+      roof
+    );
+
+    const chimney=
+      new THREE.Mesh(
+        new THREE.BoxGeometry(
+          .7,
+          1.2,
+          .7
+        ),
+        new THREE.MeshLambertMaterial({
+          color:0x55443a
+        })
+      );
+
+    chimney.position.set(
+      x+1.4,
+      6.2,
+      z-1.1
+    );
+
+    decorGroup.add(
+      chimney
+    );
+  }
+
+  // archer towers with platforms and ladders
+  for(
+    const [x,z] of [
+      [-28,0],
+      [28,0],
+      [0,-28],
+      [0,28]
+    ]
+  ){
+
+    const legs=[
+      [-1,-1],
+      [1,-1],
+      [-1,1],
+      [1,1]
+    ];
+
+    for(
+      const [dx,dz] of legs
+    ){
+
+      const leg=
+        new THREE.Mesh(
+          new THREE.CylinderGeometry(
+            .18,
+            .22,
+            5.2,
+            6
+          ),
+          new THREE.MeshLambertMaterial({
+            color:0x7b5737
+          })
+        );
+
+      leg.position.set(
+        x+dx*1.35,
+        2.6,
+        z+dz*1.35
+      );
+
+      decorGroup.add(
+        leg
+      );
+    }
+
+    const plat=
+      new THREE.Mesh(
+        new THREE.BoxGeometry(
+          4.4,
+          .55,
+          4.4
+        ),
+        new THREE.MeshLambertMaterial({
+          color:0x9b6f45
+        })
+      );
+
+    plat.position.set(
+      x,
+      5.2,
+      z
+    );
+
+    decorGroup.add(
+      plat
+    );
+
+    const parapet=
+      new THREE.Mesh(
+        new THREE.CylinderGeometry(
+          1.4,
+          1.8,
+          1.6,
+          6
+        ),
+        new THREE.MeshLambertMaterial({
+          color:0x81644f
+        })
+      );
+
+    parapet.position.set(
+      x,
+      6.1,
+      z
+    );
+
+    decorGroup.add(
+      parapet
+    );
+
+    for(
+      let i=0;
+      i<4;
+      i++
+    ){
+
+      const rung=
+        new THREE.Mesh(
+          new THREE.BoxGeometry(
+            .18,
+            .15,
+            1.6
+          ),
+          new THREE.MeshLambertMaterial({
+            color:0xc8aa72
+          })
+        );
+
+      rung.position.set(
+        x-1.55,
+        1.0+i*.8,
+        z
+      );
+
+      decorGroup.add(
+        rung
+      );
+    }
+
+    const rail1=
+      new THREE.Mesh(
+        new THREE.BoxGeometry(
+          .18,
+          4.2,
+          .18
+        ),
+        new THREE.MeshLambertMaterial({
+          color:0x7b5737
+        })
+      );
+
+    rail1.position.set(
+      x-1.9,
+      2.4,
+      z-.65
+    );
+
+    decorGroup.add(
+      rail1
+    );
+
+    const rail2=
+      new THREE.Mesh(
+        new THREE.BoxGeometry(
+          .18,
+          4.2,
+          .18
+        ),
+        new THREE.MeshLambertMaterial({
+          color:0x7b5737
+        })
+      );
+
+    rail2.position.set(
+      x-1.9,
+      2.4,
+      z+.65
+    );
+
+    decorGroup.add(
+      rail2
+    );
+  }
+
+  // cannons and torches
+  for(
+    const [x,z] of [
+      [-30,-8],
+      [30,8],
+      [-8,30],
+      [8,-30]
     ]
   ){
 
     const base=
       new THREE.Mesh(
-
         new THREE.CylinderGeometry(
-          2.3,
-          2.7,
-          2,
+          1.7,
+          2.1,
+          1.1,
           8
         ),
-
         new THREE.MeshLambertMaterial({
           color:0x5f4a3a
         })
@@ -1759,22 +1987,22 @@ function decorClan(){
 
     base.position.set(
       x,
-      3,
+      1.4,
       z
     );
 
-    decorGroup.add(base);
+    decorGroup.add(
+      base
+    );
 
     const cannon=
       new THREE.Mesh(
-
         new THREE.CylinderGeometry(
-          .45,
-          .55,
-          3,
+          .42,
+          .56,
+          3.2,
           10
         ),
-
         new THREE.MeshLambertMaterial({
           color:0x2f3339
         })
@@ -1785,89 +2013,137 @@ function decorClan(){
 
     cannon.position.set(
       x,
-      4,
+      2.3,
       z
     );
 
     decorGroup.add(
       cannon
     );
+
+    for(
+      const sx of [
+        -1,
+        1
+      ]
+    ){
+
+      const torch=
+        new THREE.Mesh(
+          new THREE.CylinderGeometry(
+            .08,
+            .08,
+            1.4,
+            6
+          ),
+          new THREE.MeshLambertMaterial({
+            color:0x6f523d
+          })
+        );
+
+      torch.position.set(
+        x+sx*2.1,
+        1.5,
+        z+1.4
+      );
+
+      decorGroup.add(
+        torch
+      );
+
+      const flame=
+        new THREE.Mesh(
+          new THREE.SphereGeometry(
+            .26,
+            10,
+            8
+          ),
+          new THREE.MeshBasicMaterial({
+            color:0xff8a2d
+          })
+        );
+
+      flame.position.set(
+        x+sx*2.1,
+        2.35,
+        z+1.4
+      );
+
+      decorGroup.add(
+        flame
+      );
+    }
   }
 
-  const gold=
-    new THREE.Mesh(
-
-      new THREE.SphereGeometry(
-        2.2,
-        16,
-        10
-      ),
-
-      new THREE.MeshLambertMaterial({
-        color:0xffc928
-      })
-    );
-
-  gold.scale.y=.72;
-
-  gold.position.set(
-    25,
-    5.2,
-    -22
-  );
-
-  decorGroup.add(gold);
-
-  addIconBillboard(
-    decorGroup,
-    25,
-    9,
-    -22,
-    0xffd34f
-  );
-
-  const elixir=
-    new THREE.Mesh(
-
-      new THREE.SphereGeometry(
-        2.2,
-        16,
-        10
-      ),
-
-      new THREE.MeshPhongMaterial({
-        color:0xd253e2,
-        transparent:true,
-        opacity:.82
-      })
-    );
-
-  elixir.scale.y=.72;
-
-  elixir.position.set(
-    -25,
-    5.2,
-    22
-  );
-
-  decorGroup.add(
-    elixir
-  );
-
-  addIconBillboard(
-    decorGroup,
-    -25,
-    9,
-    22,
-    0xd15ae8
-  );
-
+  // army camps as tents
   for(
     const [x,z,c] of [
+      [-34,12,0xe8d6b4],
+      [34,-12,0xe8d6b4],
+      [-34,-12,0xc6934d],
+      [34,12,0xb05dde]
+    ]
+  ){
 
-      [-9,-18,0xff5b5b],
-      [9,18,0x4dabf7]
+    const tent=
+      new THREE.Mesh(
+        new THREE.ConeGeometry(
+          3.1,
+          2.4,
+          4
+        ),
+        new THREE.MeshLambertMaterial({
+          color:c
+        })
+      );
 
+    tent.position.set(
+      x,
+      2.4,
+      z
+    );
+
+    tent.rotation.y=
+      Math.PI/4;
+
+    tent.scale.z=.9;
+
+    decorGroup.add(
+      tent
+    );
+
+    const bedroll=
+      new THREE.Mesh(
+        new THREE.CylinderGeometry(
+          .45,
+          .45,
+          2.2,
+          10
+        ),
+        new THREE.MeshLambertMaterial({
+          color:0x6a5442
+        })
+      );
+
+    bedroll.rotation.z=
+      Math.PI/2;
+
+    bedroll.position.set(
+      x,
+      1.0,
+      z+2.0
+    );
+
+    decorGroup.add(
+      bedroll
+    );
+  }
+
+  // flags near core
+  for(
+    const [x,z,c] of [
+      [-6,-20,0xff5b5b],
+      [6,20,0x4dabf7]
     ]
   ){
 
@@ -1886,12 +2162,10 @@ function decorClan(){
 
     const flag=
       new THREE.Mesh(
-
         new THREE.PlaneGeometry(
-          2.3,
-          1.25
+          2.8,
+          1.4
         ),
-
         new THREE.MeshBasicMaterial({
           color:c,
           side:THREE.DoubleSide
@@ -1899,7 +2173,7 @@ function decorClan(){
       );
 
     flag.position.set(
-      x+1.15,
+      x+1.35,
       5,
       z
     );
@@ -1989,6 +2263,8 @@ function addIconBillboard(
     y,
     z
   );
+
+  wrap.userData.billboard=true;
 
   wrap.lookAt(
     camera.position
@@ -3694,10 +3970,9 @@ function toast(t){
   );
 
   setTimeout(
-    ()=>
-      e.classList.remove(
-        'show'
-      ),
+    ()=>e.classList.remove(
+      'show'
+    ),
     1700
   );
 }
@@ -5598,6 +5873,13 @@ function physics(dt){
     return;
   }
 
+  if(
+    state.world==='voxel'&&
+    state.dynamicBlocks.size===0
+  ){
+    return;
+  }
+
   const cfg=
     state.config.classes[
       state.klass
@@ -6405,15 +6687,6 @@ function updateDayNight(){
       Math.sin(a)
     );
 
-  const dusk=
-    Math.max(
-      0,
-      Math.sin(
-        a+
-        Math.PI
-      )
-    );
-
   const skyDay=
     new THREE.Color(
       0x7ec8ff
@@ -6795,6 +7068,20 @@ function animate(){
         dt
       )
     );
+  }
+
+  for(
+    const g of decorGroup.children
+  ){
+
+    if(
+      g.userData&&
+      g.userData.billboard
+    ){
+      g.lookAt(
+        camera.position
+      );
+    }
   }
 
   renderer.render(

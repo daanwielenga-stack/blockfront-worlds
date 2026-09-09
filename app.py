@@ -155,24 +155,38 @@ def battle_world():
 
 def clan_world():
     boxes = [
-        box(0, 1.1, -18, 28, 2.2, 2, "#8c8f93", "clanwall"), box(0, 1.1, 18, 28, 2.2, 2, "#8c8f93", "clanwall"),
-        box(-18, 1.1, -8, 2, 2.2, 20, "#8c8f93", "clanwall"), box(-18, 1.1, 10, 2, 2.2, 12, "#8c8f93", "clanwall"),
-        box(18, 1.1, -10, 2, 2.2, 12, "#8c8f93", "clanwall"), box(18, 1.1, 8, 2, 2.2, 20, "#8c8f93", "clanwall"),
-        box(0, 3.6, 0, 12, 7.2, 12, "#c1703d", "townhall"), box(0, 7.6, 0, 8, 1.6, 8, "#d98a4c", "roofbase"),
-        box(-24, 2.8, -22, 9, 5.6, 9, "#9e5b3b", "hut"), box(24, 2.8, 22, 9, 5.6, 9, "#9e5b3b", "hut"),
-        box(24, 2.7, -22, 8, 5.4, 8, "#d4a647", "goldstorage"), box(-24, 2.7, 22, 8, 5.4, 8, "#a257d8", "elixirstorage"),
-        box(-26, 1.4, 0, 6, 2.8, 6, "#6d4c41", "tower"), box(26, 1.4, 0, 6, 2.8, 6, "#6d4c41", "tower"),
-        box(0, 1.4, -27, 6, 2.8, 6, "#6d4c41", "tower"), box(0, 1.4, 27, 6, 2.8, 6, "#6d4c41", "tower"),
-        box(-30, 1.2, -10, 6, 2.4, 6, "#8b6c4f", "camp"), box(30, 1.2, 10, 6, 2.4, 6, "#8b6c4f", "camp"),
-        box(-9, 1.0, -25, 5, 2.0, 5, "#74777a", "cannon"), box(9, 1.0, 25, 5, 2.0, 5, "#74777a", "cannon"),
+        # outer village wall ring
+        box(0, 1.1, -22, 34, 2.2, 2, "#8c8f93", "clanwall"), box(0, 1.1, 22, 34, 2.2, 2, "#8c8f93", "clanwall"),
+        box(-22, 1.1, 0, 2, 2.2, 34, "#8c8f93", "clanwall"), box(22, 1.1, 0, 2, 2.2, 34, "#8c8f93", "clanwall"),
+        # inner compartment walls
+        box(0, 1.1, -10, 22, 2.2, 2, "#8c8f93", "clanwall"), box(0, 1.1, 10, 22, 2.2, 2, "#8c8f93", "clanwall"),
+        box(-10, 1.1, 0, 2, 2.2, 22, "#8c8f93", "clanwall"), box(10, 1.1, 0, 2, 2.2, 22, "#8c8f93", "clanwall"),
+        # town hall core
+        box(0, 2.8, 0, 12, 5.6, 12, "#c1703d", "townhall"), box(0, 5.9, 0, 9, 1.2, 9, "#e08a48", "roofbase"),
+        box(0, 7.1, 0, 6, 1.2, 6, "#f0a24d", "rooftop"),
+        # storages
+        box(-15, 2.2, -15, 8, 4.4, 8, "#d0a23d", "goldstorage"), box(15, 2.2, 15, 8, 4.4, 8, "#d0a23d", "goldstorage"),
+        box(-15, 2.2, 15, 8, 4.4, 8, "#a257d8", "elixirstorage"), box(15, 2.2, -15, 8, 4.4, 8, "#a257d8", "elixirstorage"),
+        # huts and defenses
+        box(-30, 2.2, -24, 8, 4.4, 8, "#9e5b3b", "hut"), box(30, 2.2, 24, 8, 4.4, 8, "#9e5b3b", "hut"),
+        box(30, 2.2, -24, 8, 4.4, 8, "#9e5b3b", "hut"), box(-30, 2.2, 24, 8, 4.4, 8, "#9e5b3b", "hut"),
+        box(-28, 2.0, 0, 5, 4.0, 5, "#81644f", "tower"), box(28, 2.0, 0, 5, 4.0, 5, "#81644f", "tower"),
+        box(0, 2.0, -28, 5, 4.0, 5, "#81644f", "tower"), box(0, 2.0, 28, 5, 4.0, 5, "#81644f", "tower"),
+        box(-30, 1.0, -8, 5, 2.0, 5, "#6f7376", "cannon"), box(30, 1.0, 8, 5, 2.0, 5, "#6f7376", "cannon"),
+        box(-8, 1.0, 30, 5, 2.0, 5, "#6f7376", "cannon"), box(8, 1.0, -30, 5, 2.0, 5, "#6f7376", "cannon"),
+        # army camps / collectors / path markers
+        box(-34, 1.0, 12, 7, 2.0, 7, "#8b6c4f", "camp"), box(34, 1.0, -12, 7, 2.0, 7, "#8b6c4f", "camp"),
+        box(-34, 1.0, -12, 6, 2.0, 6, "#b98945", "collector"), box(34, 1.0, 12, 6, 2.0, 6, "#a757d6", "collector"),
+        box(0, 0.15, -16, 8, 0.3, 20, "#c4b49b", "path"), box(-16, 0.15, 0, 20, 0.3, 8, "#c4b49b", "path"),
+        box(16, 0.15, 0, 20, 0.3, 8, "#c4b49b", "path"), box(0, 0.15, 16, 8, 0.3, 20, "#c4b49b", "path"),
     ]
     return {
         "id": "clan", "name": "Clash of Clans", "short": "Clans", "theme": "clan",
-        "description": "A dense 3D village raid map of walls, towers, storages, camps and a central town hall.",
+        "description": "A brighter 3D village raid map with compartment walls, a central town hall, storages and defenses.",
         "boxes": boxes,
-        "spawns": [(-33, 0, -33), (33, 0, 33), (-33, 0, 33), (33, 0, -33), (-29, 0, 7), (29, 0, -7), (-7, 0, -30), (7, 0, 30)],
-        "hardpoints": [(0, 0, 0), (-25, 0, 0), (25, 0, 0), (0, 0, 27)],
-        "bounds": [-200000, 200000, -200000, 200000], "ground": "#8cc866", "sky": "#87ceeb", "fog": "#bfe8ff",
+        "spawns": [(-39, 0, -39), (39, 0, 39), (-39, 0, 39), (39, 0, -39), (-34, 0, 8), (34, 0, -8), (-8, 0, -34), (8, 0, 34)],
+        "hardpoints": [(0, 0, 0), (-16, 0, -16), (16, 0, 16), (0, 0, 28)],
+        "bounds": [-200000, 200000, -200000, 200000], "ground": "#90cf67", "sky": "#8fd4ff", "fog": "#ccecff",
         "build": False, "day_night": False, "mobs": False, "infinite": True,
     }
 
@@ -394,6 +408,26 @@ class Room:
                     created = True
         return created
 
+    def voxel_surface_spawn(self, sx: int, sz: int, search_radius: int = 3):
+        self.ensure_voxel_area(sx, sz, VOXEL_CHUNK_RADIUS)
+        best = None
+        for dz in range(-search_radius, search_radius + 1):
+            for dx in range(-search_radius, search_radius + 1):
+                x = grid_round(sx + dx * VOXEL_GRID, VOXEL_GRID)
+                z = grid_round(sz + dz * VOXEL_GRID, VOXEL_GRID)
+                col = [b for b in self.blocks.values() if b.x == x and b.z == z and b.type != "lever"]
+                if not col:
+                    continue
+                top = max(col, key=lambda b: b.y)
+                top_surface = top.y + 1
+                penalty = abs(dx) + abs(dz)
+                score = top_surface - penalty * 0.35
+                if best is None or score > best[0]:
+                    best = (score, x, top_surface, z)
+        if best is None:
+            return sx, 10, sz
+        return best[1], best[2], best[3]
+
     def generate_voxel_chunk(self, cx: int, cz: int):
         for lx in range(VOXEL_CHUNK_CELLS):
             for lz in range(VOXEL_CHUNK_CELLS):
@@ -419,8 +453,12 @@ class Room:
                     if idx == layers - 1:
                         typ = "grass"
                     self.blocks[key] = Block(key, wx, y, wz, typ, "world")
+                spawn_clear = any(abs(wx - sp[0]) <= 4 and abs(wz - sp[2]) <= 4 for sp in self.world_cfg["spawns"]) or (abs(wx) <= 8 and abs(wz) <= 8)
+                if spawn_clear:
+                    for y in range(7, 15, 2):
+                        self.blocks.pop(f"{wx}:{y}:{wz}", None)
                 tree_score = math.sin(wx * 0.27) + math.cos(wz * 0.23)
-                if layers >= 4 and abs(wx) + abs(wz) > 8 and tree_score > 1.25:
+                if layers >= 4 and not spawn_clear and abs(wx) + abs(wz) > 8 and tree_score > 1.25:
                     top = 1 + (layers - 1) * 2
                     for oy in (2, 4, 6):
                         self.add_block(wx, top + oy, wz, "wood", "world")
@@ -471,6 +509,9 @@ class Room:
             return min(ds) if ds else 99999
 
         sx, sy, sz = max(candidates, key=min_enemy_dist)
+        if self.world == "voxel":
+            sx, sy, sz = self.voxel_surface_spawn(int(sx), int(sz))
+            sy = max(sy, 10)
         p.x, p.y, p.z = sx, sy, sz
         p.vx = p.vy = p.vz = 0
         p.hp = CLASSES[p.klass]["hp"]

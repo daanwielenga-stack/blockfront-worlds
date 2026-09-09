@@ -5,6 +5,8 @@ from app import (
     CLASSES,
     WORLD_ORDER,
     WORLDS,
+    Player,
+    Room,
     app,
     get_room,
     ray_aabb,
@@ -110,3 +112,13 @@ def test_websocket_welcome_precedes_room_updates():
         assert first['t'] == 'welcome'
         assert first['world'] == 'voxel'
         assert first['blocks']
+
+
+def test_voxel_spawn_is_above_surface():
+    b = Room("ROOM2", "FFA", "voxel")
+    p = Player(id="p", name="P", klass="Runner", team="Alpha", x=0, y=0, z=0)
+    b.players[p.id] = p
+    b.spawn(p)
+    assert p.y >= 8
+    top = max(block.y for block in b.blocks.values() if block.x == p.x and block.z == p.z) + 1
+    assert p.y >= top
