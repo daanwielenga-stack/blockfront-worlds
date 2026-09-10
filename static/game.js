@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {GLTFLoader} from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js';
 import {RoundedBoxGeometry} from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/geometries/RoundedBoxGeometry.js';
 import {initAds, setGameplayActive, prepareNaturalBreak} from './ads.js';
 
@@ -31,7 +32,7 @@ const state={
   settings:{sens:+(localStorage.getItem('bf_sens')||1),fov:+(localStorage.getItem('bf_fov')||82),bob:localStorage.getItem('bf_bob')!=='0',quality:localStorage.getItem('bf_quality')!=='0',musicVolume:clamp(+(localStorage.getItem('bf_music_volume')||82)/100,0,1),sfxVolume:clamp(+(localStorage.getItem('bf_sfx_volume')||92)/100,0,1)},
   hp:100,alive:true,ammo:30,reloading:false,lastShot:0,players:new Map(),killfeed:[],keys:{},mouseDown:false,ads:false,
   yaw:0,pitch:0,pos:new THREE.Vector3(0,0,0),vel:new THREE.Vector3(),grounded:true,slide:0,crouched:false,jumpLatch:false,landGrace:0,speedBoost:1,chat:false,
-  remote:new Map(),mobs:new Map(),ping:0,currentBoxes:[],dynamicBlocks:new Map(),buildMode:false,blockIndex:0,mcHotbar:0,mcSprint:false,lastWDown:0,stepAt:0,worldTime:0,streamChunk:'',voxelRenderKey:'',voxelHorizonKey:'',clanRenderKey:'',milanProjectiles:[],miningHeld:false,mining:null,miningSentKey:null,prefetchAt:0,prefetchX:0,prefetchZ:0,musicOn:localStorage.getItem('bf_music')!=='0',musicNextAt:0,musicStep:0,clanCollisionBoxes:[],clanPatrols:[],voxelLastPrune:0,voxelLastHorizonBuild:0,inventory:{},mcSlots:[MC_RESERVED_GUN,null,null,null,null,null,null,null,MC_RESERVED_SWORD],inventoryOpen:false,craftingScope:'inventory',selectedRecipe:null,voxelStructureKey:'',clanCache:new Map()
+  remote:new Map(),mobs:new Map(),ping:0,currentBoxes:[],dynamicBlocks:new Map(),buildMode:false,blockIndex:0,mcHotbar:0,mcSprint:false,lastWDown:0,stepAt:0,worldTime:0,streamChunk:'',voxelRenderKey:'',voxelHorizonKey:'',clanRenderKey:'',milanProjectiles:[],miningHeld:false,mining:null,miningSentKey:null,prefetchAt:0,prefetchX:0,prefetchZ:0,musicOn:localStorage.getItem('bf_music')!=='0',musicNextAt:0,musicStep:0,clanCollisionBoxes:[],clanPatrols:[],voxelLastPrune:0,voxelLastHorizonBuild:0,inventory:{},mcSlots:[MC_RESERVED_GUN,null,null,null,null,null,null,null,MC_RESERVED_SWORD],inventoryOpen:false,craftingScope:'inventory',selectedRecipe:null,voxelStructureKey:'',clanCache:new Map(),pendingPlacements:new Map()
 };
 
 let scene,camera,renderer,clock,weaponGroup,muzzle,worldGroup,streamGroup,dynamicGroup,remoteGroup,mobGroup,decorGroup,hardpointMesh;
@@ -301,6 +302,7 @@ function decorBattle(){
   stormRing=new THREE.Mesh(new THREE.CylinderGeometry(43,43,20,64,1,true),new THREE.MeshBasicMaterial({color:0x7656ff,transparent:true,opacity:.09,side:THREE.DoubleSide}));stormRing.position.y=8;decorGroup.add(stormRing);
 }
 function clanTownHall(group,x,z,scale=1){
+  const glb=clanGLBClone('town_hall',group,x,0,z,scale);if(glb)return glb;
   clanBox(group,x,1.25*scale,z,9*scale,2.5*scale,8*scale,0xa85a35);
   clanBox(group,x,2.7*scale,z,7.8*scale,.65*scale,6.8*scale,0xd57a3c);
   clanRoof(group,x,4.65*scale,z,5.5*scale,3.1*scale,0xe48335);
@@ -324,6 +326,7 @@ function clanElixirStorage(group,x,z){
   clanCylinder(group,x,4.0,z,2.25,2.25,.35,0xc4a878,12);addIconBillboard(group,x,5.7,z,0xdc53e8);
 }
 function clanArcherTower(group,x,z){
+  const glb=clanGLBClone('archer_tower',group,x,0,z,1);if(glb)return glb;
   for(const [dx,dz] of [[-1,-1],[1,-1],[-1,1],[1,1]])clanCylinder(group,x+dx*1.25,2.5,z+dz*1.25,.18,.27,5.0,0x735138,7);
   clanBox(group,x,5.0,z,4.2,.55,4.2,0x9b7048);clanCylinder(group,x,5.95,z,1.65,1.95,1.5,0x8c6745,8);
   // small archer silhouette with pink hair and bow, reinforcing the unmistakable tower identity
@@ -331,6 +334,7 @@ function clanArcherTower(group,x,z){
   const bow=clanMesh(group,new THREE.TorusGeometry(.55,.055,6,18,Math.PI),clanMaterial(0x704629),x+.48,6.55,z-.15,0,Math.PI/2,.35);bow.castShadow=false;
 }
 function clanCannon(group,x,z,rot=0){
+  const glb=clanGLBClone('cannon',group,x,0,z,1,rot);if(glb)return glb;
   clanCylinder(group,x,.58,z,1.75,2.1,1.0,0x806245,10);for(const s of [-1,1])clanCylinder(group,x+Math.cos(rot+Math.PI/2)*s*1.25,.9,z+Math.sin(rot+Math.PI/2)*s*1.25,.62,.62,.40,0x463c34,12,Math.PI/2,rot,0);
   const barrel=clanCylinder(group,x,1.55,z,.42,.65,3.2,0x333538,12,Math.PI/2,0,rot+Math.PI/2);barrel.position.x+=Math.sin(rot)*.7;barrel.position.z+=Math.cos(rot)*.7;
 }
@@ -392,15 +396,12 @@ function clanTheme(th){return CLAN_TH_THEMES[clamp(th,1,17)]}
 function clanGlowMaterial(c,intensity=.8){const key=`glow:${c}:${intensity}`;if(clanMaterialCache.has(key))return clanMaterialCache.get(key);const m=new THREE.MeshStandardMaterial({color:c,emissive:c,emissiveIntensity:intensity,roughness:.34,metalness:.04});m.userData.sharedResource=true;clanMaterialCache.set(key,m);return m}
 function clanTownHallLevel(group,x,z,th){
   const t=clanTheme(th),s=.72+Math.min(th,12)*.025;
-  clanBox(group,x,1.3*s,z,8.6*s,2.6*s,7.8*s,t.body);
-  clanBox(group,x,2.65*s,z,7.5*s,.55*s,6.8*s,t.trim);
-  if(th<=2){clanRoof(group,x,4.1*s,z,5.6*s,2.5*s,t.roof)}
-  else{
-    clanRoof(group,x,4.25*s,z,5.45*s,2.25*s,t.roof);
-    clanBox(group,x,4.45*s,z,4.9*s,.65*s,4.6*s,t.body);
-    clanRoof(group,x,5.75*s,z,3.55*s,1.9*s,t.roof);
+  const core=clanGLBClone('town_hall',group,x,0,z,1.42*s,0,t.body);
+  if(!core){
+    clanBox(group,x,1.3*s,z,8.6*s,2.6*s,7.8*s,t.body);clanBox(group,x,2.65*s,z,7.5*s,.55*s,6.8*s,t.trim);
+    if(th<=2)clanRoof(group,x,4.1*s,z,5.6*s,2.5*s,t.roof);else{clanRoof(group,x,4.25*s,z,5.45*s,2.25*s,t.roof);clanBox(group,x,4.45*s,z,4.9*s,.65*s,4.6*s,t.body);clanRoof(group,x,5.75*s,z,3.55*s,1.9*s,t.roof)}
   }
-  // entrance and trim
+  // level-specific entrance/trim remains separate so every Town Hall still evolves visually
   clanBox(group,x,1.7*s,z-3.96*s,2.0*s,2.45*s,.18*s,t.dark);
   clanBox(group,x,3.0*s,z-4.08*s,2.8*s,.24*s,.14*s,t.accent);
   if(th>=6){for(const sx of [-1,1])clanCylinder(group,x+sx*3.15*s,2.0*s,z,.20*s,.26*s,3.6*s,t.accent,8)}
@@ -544,6 +545,7 @@ function updateClanPatrols(){
   for(const p of state.clanPatrols){const a=p.phase+t*p.speed;p.g.position.set(p.cx+Math.cos(a)*p.rad,.08+Math.abs(Math.sin(t*4+p.bob))*.08,p.cz+Math.sin(a*.91)*p.rad);p.g.rotation.y=-a+Math.PI/2}
 }
 function clanLaboratory(group,x,z,th){
+  const glb=clanGLBClone('laboratory',group,x,0,z,.95+Math.min(th,12)*.012);if(glb)return glb;
   const t=clanTheme(th),s=.90+Math.min(th,12)*.016;clanBlobShadow(group,x,z,2.9*s);clanCylinder(group,x,.42*s,z,3.45*s,3.75*s,.72*s,0x6a6861,20);clanCylinder(group,x,1.18*s,z,3.16*s,3.42*s,1.00*s,0xa59a7d,20);clanBox(group,x,1.65*s,z-3.22*s,1.85*s,2.35*s,.25*s,0x443d35);let glassMat=clanMaterialCache.get('labGlass');if(!glassMat){glassMat=new THREE.MeshStandardMaterial({color:0xd653ee,transparent:true,opacity:.77,roughness:.13,metalness:.02,emissive:0x5d1568,emissiveIntensity:.26});glassMat.userData.sharedResource=true;clanMaterialCache.set('labGlass',glassMat)}const liquid=clanMesh(group,new THREE.SphereGeometry(2.60*s,24,18),glassMat,x,3.05*s,z);liquid.scale.y=.73;liquid.castShadow=false;clanCylinder(group,x,4.72*s,z,2.82*s,2.82*s,.42*s,t.accent,20);clanCylinder(group,x,5.08*s,z,.46*s,.58*s,.66*s,0x67645c,14);for(const a of [0,Math.PI/2,Math.PI,Math.PI*1.5])clanCylinder(group,x+Math.cos(a)*2.62*s,3.15*s,z+Math.sin(a)*2.62*s,.14*s,.18*s,3.65*s,0xd8cda8,10);for(const sx of [-1,1]){const tank=clanMesh(group,new THREE.SphereGeometry(.72*s,14,10),clanGlowMaterial(sx<0?0x64d9ff:0xff70dc,.35),x+sx*3.05*s,1.52*s,z+.75*s);tank.scale.y=1.22;clanCylinder(group,x+sx*3.05*s,.62*s,z+.75*s,.62*s,.70*s,.55*s,0x6a6861,12)}const pipe=clanMesh(group,new THREE.TorusGeometry(.78*s,.17*s,9,20,Math.PI),clanMaterial(0x686d70),x+2.46*s,2.20*s,z-.35*s,0,Math.PI/2,0);pipe.castShadow=false;for(let i=0;i<3;i++){const vial=clanMesh(group,new THREE.SphereGeometry(.34*s,11,9),clanGlowMaterial(i===0?0x65d5ff:i===1?0xff67de:0x80ef6d,.48),x-1.25*s+i*1.2*s,4.98*s,z);vial.castShadow=false}
 }
 function clanWorkshopProps(group,cx,cz,th){
@@ -754,7 +756,8 @@ function handleMessage(m){
   else if(m.t==='craft_result'){syncInventory(m.inventory||{});toast(`Crafted ${m.count||1}× ${mcItemLabel(m.item)}`);playBlockSound('place')}
   else if(m.t==='craft_error'){syncInventory(m.inventory||state.inventory);toast('Not enough materials')}
   else if(m.t==='block_remove'){if(state.dynamicBlocks.delete(m.key)){if(state.miningSentKey===m.key)state.miningSentKey=null;state.voxelRenderKey='';state.voxelHorizonKey='';rebuildVoxelRender(true)}}
-  else if(m.t==='block_add'){const b=m.block;if(b?.key){state.dynamicBlocks.set(b.key,b);state.voxelRenderKey='';rebuildVoxelRender(true)}}
+  else if(m.t==='block_add'){const b=m.block;if(b?.key){state.pendingPlacements.delete(b.key);state.dynamicBlocks.set(b.key,b);state.voxelRenderKey='';state.voxelHorizonKey='';rebuildVoxelRender(true)}}
+  else if(m.t==='block_place_error'){let key=m.key||'';if(!key&&state.pendingPlacements.size)key=[...state.pendingPlacements.keys()].at(-1);if(key&&state.pendingPlacements.has(key)){state.pendingPlacements.delete(key);state.dynamicBlocks.delete(key);state.voxelRenderKey='';state.voxelHorizonKey='';rebuildVoxelRender(true)}toast(m.message||'Cannot place block there')}
   else if(m.t==='blocks')syncBlocks(m.blocks||[],true)
   else if(m.t==='blocks_patch')syncBlocks(m.blocks||[],false)
   else if(m.t==='error'){toast(m.message||'Server error');showMenu()}
@@ -890,7 +893,16 @@ function voxelColumnLoaded(x,z){const gx=Math.round(x/2)*2,gz=Math.round(z/2)*2;
 function voxelFallbackGround(x,z){const gx=Math.round(x/2)*2,gz=Math.round(z/2)*2;return voxelSurfaceHeight(gx,gz)+1}
 function requestVoxelPrefetch(x,z){const now=performance.now();if(now-state.prefetchAt<120)return;state.prefetchAt=now;wsSend({t:'voxel_prefetch',x,z})}
 function updateVoxelPrefetch(){if(state.world!=='voxel'||!state.playing)return;const speed=Math.hypot(state.vel.x,state.vel.z),lead=4.5+Math.min(4.5,speed*.35),tx=state.pos.x+state.vel.x*lead,tz=state.pos.z+state.vel.z*lead,moved=Math.hypot(state.pos.x-state.prefetchX,state.pos.z-state.prefetchZ);if(!voxelColumnLoaded(tx,tz)||moved>9)requestVoxelPrefetch(tx,tz)}
-function placeBlock(item=mcSelectedItem()){const hit=blockRay();if(!hit?.block||!item||!mcItemMeta(item).placeable||mcInventoryCount(item)<=0)return;const b=hit.block,n=hit.face?.normal||new THREE.Vector3(0,1,0),pos=[b.x+Math.round(n.x)*2,b.y+Math.round(n.y)*2,b.z+Math.round(n.z)*2];wsSend({t:'block_place',pos,type:item})}
+function placementNormal(hit){
+  if(!hit?.block)return new THREE.Vector3(0,1,0);const b=hit.block,p=hit.point||new THREE.Vector3(b.x,b.y+1,b.z),dx=(p.x-b.x),dy=(p.y-b.y),dz=(p.z-b.z),ax=Math.abs(dx),ay=Math.abs(dy),az=Math.abs(dz);if(ax>=ay&&ax>=az)return new THREE.Vector3(Math.sign(dx)||1,0,0);if(az>=ax&&az>=ay)return new THREE.Vector3(0,0,Math.sign(dz)||1);return new THREE.Vector3(0,Math.sign(dy)||1,0)
+}
+function fallbackPlacementTarget(){const origin=camera.getWorldPosition(new THREE.Vector3()),dir=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);for(let d=2;d<=7;d+=.35){const p=origin.clone().addScaledVector(dir,d),gx=Math.round(p.x/2)*2,gz=Math.round(p.z/2)*2;let gy=Math.round((p.y-1)/2)*2+1;for(let oy=5;oy>=-5;oy-=2){const key=`${gx}:${gy+oy}:${gz}`;const b=state.dynamicBlocks.get(key);if(b)return [b.x,b.y+2,b.z]}const surface=voxelFallbackGround(gx,gz);if(Math.abs(p.y-surface)<1.4)return [gx,Math.round((surface+1-1)/2)*2+1,gz]}return null}
+function placeBlock(item=mcSelectedItem()){
+  if(!item||!mcItemMeta(item).placeable||mcInventoryCount(item)<=0){toast('Select a placeable block first');return}
+  const hit=blockRay();let pos=null;if(hit?.block){const b=hit.block,n=placementNormal(hit);pos=[b.x+n.x*2,b.y+n.y*2,b.z+n.z*2]}else pos=fallbackPlacementTarget();if(!pos){toast('Aim at a nearby block face');return}
+  const x=Math.round(pos[0]/2)*2,z=Math.round(pos[2]/2)*2,y=Math.round((pos[1]-1)/2)*2+1,key=`${x}:${y}:${z}`;if(state.dynamicBlocks.has(key)){toast('That space is occupied');return}
+  const optimistic={key,x,y,z,type:item,owner:state.id,powered:false};state.dynamicBlocks.set(key,optimistic);state.pendingPlacements.set(key,optimistic);state.voxelRenderKey='';state.voxelHorizonKey='';rebuildVoxelRender(true);wsSend({t:'block_place',pos:[x,y,z],type:item});
+}
 function useBlock(){const hit=blockRay();if(hit?.blockKey)wsSend({t:'block_use',key:hit.blockKey})}
 function toggleBuildMode(){if(state.world!=='voxel'){toast('Voxel tools are only available in Voxel Frontier');return}setMinecraftHotbar(state.mcHotbar===0?1:0)}
 function cycleBlock(){if(state.world==='voxel')setMinecraftHotbar((state.mcHotbar+1)%MC_HOTBAR_SIZE)}

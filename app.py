@@ -21,7 +21,7 @@ STATIC = ROOT / "static"
 
 logger = logging.getLogger("blockfront")
 
-app = FastAPI(title="Blockfront Worlds", version="3.0.0")
+app = FastAPI(title="Blockfront Worlds", version="3.1.0")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
@@ -1087,7 +1087,7 @@ async def terms():
 async def health():
     return {
         "ok": True,
-        "version": "3.0.0",
+        "version": "3.1.0",
         "rooms": len(rooms),
         "players": sum(len(r.players) for r in rooms.values()),
     }
@@ -1100,7 +1100,7 @@ async def config():
 
 @app.get("/api/site-config")
 async def site_config():
-    return JSONResponse({"ads": ad_config(), "version": "3.0.0", "brand": "Blockfront Worlds"})
+    return JSONResponse({"ads": ad_config(), "version": "3.1.0", "brand": "Blockfront Worlds"})
 
 
 @app.get("/api/rooms")
@@ -1277,6 +1277,7 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                 p.last_edit = now
                 typ = str(msg.get("type", "dirt")).lower()
                 if typ not in BLOCK_TYPES or p.inventory.get(typ, 0) <= 0:
+                    await ws.send_json({"t": "block_place_error", "message": "You do not have that block."})
                     continue
                 raw_pos = [float(v) for v in msg.get("pos", [0, 1, 0])[:3]]
                 x = grid_round(raw_pos[0], 2)
@@ -1286,13 +1287,16 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                 y = int(round((raw_pos[1] - 1) / 2) * 2 + 1)
                 y = int(clamp(y, VOXEL_MIN_Y, VOXEL_MAX_Y))
                 room.ensure_voxel_area(x, z, VOXEL_CHUNK_RADIUS)
-                if math.dist((p.x, p.y + 3.0, p.z), (x, y, z)) > 8.2:
+                if math.dist((p.x, p.y + 3.0, p.z), (x, y, z)) > 9.5:
+                    await ws.send_json({"t": "block_place_error", "key": f"{x}:{y}:{z}", "message": "That block is too far away."})
                     continue
                 key = f"{x}:{y}:{z}"
                 if key in room.blocks or len(room.blocks) >= 60000:
+                    await ws.send_json({"t": "block_place_error", "key": key, "message": "That space is occupied."})
                     continue
                 # Avoid trapping a player inside a new cube.
-                if any(abs(q.x - x) < 1.25 and abs((q.y + .9) - y) < 1.7 and abs(q.z - z) < 1.25 for q in room.players.values() if q.alive):
+                if any(abs(q.x - x) < .95 and abs((q.y + 1.8) - y) < 1.45 and abs(q.z - z) < .95 for q in room.players.values() if q.alive):
+                    await ws.send_json({"t": "block_place_error", "key": key, "message": "A player is occupying that space."})
                     continue
                 placed = room.add_block(x, y, z, typ, p.id)
                 room.take_inventory(p, typ, 1)

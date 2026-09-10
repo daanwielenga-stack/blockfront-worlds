@@ -30,7 +30,7 @@ def test_health():
     assert r.status_code == 200
     body = r.json()
     assert body['ok'] is True
-    assert body['version'] == '3.0.0'
+    assert body['version'] == '3.1.0'
 
 
 def test_config_contains_five_worlds():
