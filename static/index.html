@@ -68,7 +68,7 @@
       <div id="menuAdContent" class="ad-content">Future ad placement</div>
     </aside>
 
-    <div class="footer-note">Public alpha · original procedural worlds · multiplayer WebSockets · v2.2</div>
+    <div class="footer-note">Public alpha · original procedural worlds · multiplayer WebSockets · v3.0</div>
   </section>
 
   <div id="hud" class="hidden">
@@ -140,6 +140,35 @@
       <label>Room code</label><input id="joinCode" maxlength="12" placeholder="ABC123" />
       <label>World</label><select id="joinWorld"></select>
       <button id="joinRoomBtn" class="primary">JOIN</button>
+    </div>
+  </div>
+
+
+  <div id="inventoryModal" class="modal hidden">
+    <div class="panel mc-inventory-panel">
+      <button id="inventoryClose" class="close">×</button>
+      <div class="mc-inventory-shell">
+        <section class="mc-player-pane">
+          <h2>INVENTORY</h2>
+          <div class="mc-character-preview">
+            <div class="mc-head"></div><div class="mc-body"></div><div class="mc-arm left"></div><div class="mc-arm right"></div><div class="mc-leg left"></div><div class="mc-leg right"></div>
+          </div>
+          <p class="muted">Break blocks to collect them. Click an inventory item to place it into the selected/next free hotbar slot.</p>
+          <div id="mcInventoryGrid" class="mc-inventory-grid"></div>
+        </section>
+        <section class="mc-crafting-pane">
+          <h2 id="craftingTitle">CRAFTING · 2×2</h2>
+          <div class="mc-craft-main">
+            <div id="craftGrid" class="craft-grid"></div>
+            <div class="craft-arrow">➜</div>
+            <div id="craftOutput" class="craft-output"></div>
+          </div>
+          <button id="craftButton" class="primary">CRAFT</button>
+          <div class="mc-recipe-title">RECIPE BOOK</div>
+          <div id="craftRecipeBook" class="craft-recipe-book"></div>
+          <p class="muted">Your inventory gives you the 2×2 grid. Place and right-click a Crafting Table in the world to unlock 3×3 recipes.</p>
+        </section>
+      </div>
     </div>
   </div>
 

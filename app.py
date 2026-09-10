@@ -21,7 +21,7 @@ STATIC = ROOT / "static"
 
 logger = logging.getLogger("blockfront")
 
-app = FastAPI(title="Blockfront Worlds", version="2.7.0")
+app = FastAPI(title="Blockfront Worlds", version="3.0.0")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
@@ -248,7 +248,7 @@ WORLDS = {w["id"]: w for w in (classic_world(), voxel_world(), stadium_world(), 
 WORLD_ORDER = ["classic", "voxel", "stadium", "battle", "clan"]
 MODES = {"FFA", "TDM", "HARDPOINT"}
 MAX_PLAYERS_PER_ROOM = int(os.getenv("MAX_PLAYERS_PER_ROOM", "16"))
-BLOCK_TYPES = {"dirt", "stone", "wood", "glass", "redstone", "lamp", "lever"}
+BLOCK_TYPES = {"dirt", "stone", "wood", "planks", "cobble", "sand", "sandstone", "red_sand", "terracotta", "glass", "redstone", "lamp", "lever", "crafting_table", "furnace", "chest"}
 BLOCK_COLORS = {
     "grass": "#6fb24c", "dirt": "#8a5a32", "stone": "#777777", "wood": "#9b6b3f", "glass": "#9ed7e5",
     "redstone": "#8f1d1d", "lamp": "#d7a632", "lever": "#74604b",
@@ -256,6 +256,7 @@ BLOCK_COLORS = {
     "jungle_wood": "#795634", "jungle_leaves": "#2e8b3f", "sand": "#d9c681", "sandstone": "#c9b26f", "snow": "#f2f6f8",
     "ice": "#91c9e8", "red_sand": "#b75e36", "terracotta": "#a9573b", "podzol": "#72523a", "cobble": "#686868", "planks": "#b58a56",
     "bedrock": "#343434", "deepslate": "#45454a", "coal_ore": "#3b3b3b", "iron_ore": "#8c7568",
+    "crafting_table": "#9a6a3b", "furnace": "#676767", "chest": "#9b6b32",
 }
 VOXEL_GRID = 2
 VOXEL_CHUNK_CELLS = 8
@@ -265,6 +266,106 @@ VOXEL_MIN_Y = -23
 VOXEL_MAX_Y = 47
 VOXEL_TERRAIN_TYPES = {"grass", "dirt", "stone", "sand", "sandstone", "snow", "red_sand", "terracotta", "podzol", "bedrock", "deepslate", "coal_ore", "iron_ore"}
 VILLAGE_BIOMES = {"plains", "savanna", "taiga", "meadow", "snowy_plains", "desert"}
+
+
+# Lightweight survival inventory/crafting data.  The FPS weapons remain a separate
+# Blockfront layer, while the voxel inventory follows Minecraft's familiar progression:
+# gather logs -> planks/sticks -> crafting table -> 3x3 tools and utility blocks.
+MINECRAFT_ITEMS = {
+    "wood": {"label": "Oak Log", "color": "#9a6537", "placeable": True},
+    "planks": {"label": "Oak Planks", "color": "#b58a56", "placeable": True},
+    "dirt": {"label": "Dirt", "color": "#8a5a32", "placeable": True},
+    "cobble": {"label": "Cobblestone", "color": "#686868", "placeable": True},
+    "sand": {"label": "Sand", "color": "#d9c681", "placeable": True},
+    "sandstone": {"label": "Sandstone", "color": "#c9b26f", "placeable": True},
+    "red_sand": {"label": "Red Sand", "color": "#b75e36", "placeable": True},
+    "terracotta": {"label": "Terracotta", "color": "#a9573b", "placeable": True},
+    "glass": {"label": "Glass", "color": "#9ed7e5", "placeable": True},
+    "redstone": {"label": "Redstone", "color": "#8f1d1d", "placeable": True},
+    "lamp": {"label": "Redstone Lamp", "color": "#d7a632", "placeable": True},
+    "lever": {"label": "Lever", "color": "#74604b", "placeable": True},
+    "coal": {"label": "Coal", "color": "#2f2f31", "placeable": False},
+    "raw_iron": {"label": "Raw Iron", "color": "#b18470", "placeable": False},
+    "sticks": {"label": "Stick", "color": "#a17c52", "placeable": False},
+    "crafting_table": {"label": "Crafting Table", "color": "#9a6a3b", "placeable": True},
+    "furnace": {"label": "Furnace", "color": "#676767", "placeable": True},
+    "chest": {"label": "Chest", "color": "#9b6b32", "placeable": True},
+    "wooden_pickaxe": {"label": "Wooden Pickaxe", "color": "#9e7548", "placeable": False, "tool": "pickaxe", "tier": 1},
+    "stone_pickaxe": {"label": "Stone Pickaxe", "color": "#777777", "placeable": False, "tool": "pickaxe", "tier": 2},
+    "wooden_axe": {"label": "Wooden Axe", "color": "#9e7548", "placeable": False, "tool": "axe", "tier": 1},
+    "stone_axe": {"label": "Stone Axe", "color": "#777777", "placeable": False, "tool": "axe", "tier": 2},
+    "wooden_shovel": {"label": "Wooden Shovel", "color": "#9e7548", "placeable": False, "tool": "shovel", "tier": 1},
+    "stone_shovel": {"label": "Stone Shovel", "color": "#777777", "placeable": False, "tool": "shovel", "tier": 2},
+    "wooden_sword": {"label": "Wooden Sword", "color": "#9e7548", "placeable": False, "tool": "sword", "tier": 1},
+    "stone_sword": {"label": "Stone Sword", "color": "#777777", "placeable": False, "tool": "sword", "tier": 2},
+    "wooden_hoe": {"label": "Wooden Hoe", "color": "#9e7548", "placeable": False, "tool": "hoe", "tier": 1},
+    "stone_hoe": {"label": "Stone Hoe", "color": "#777777", "placeable": False, "tool": "hoe", "tier": 2},
+    "ladder": {"label": "Ladder", "color": "#b48c5b", "placeable": False},
+    "wooden_door": {"label": "Wooden Door", "color": "#a97848", "placeable": False},
+    "oak_slab": {"label": "Oak Slab", "color": "#b58a56", "placeable": False},
+    "oak_stairs": {"label": "Oak Stairs", "color": "#b58a56", "placeable": False},
+    "oak_fence": {"label": "Oak Fence", "color": "#9a6a3b", "placeable": False},
+    "oak_fence_gate": {"label": "Oak Fence Gate", "color": "#9a6a3b", "placeable": False},
+    "oak_trapdoor": {"label": "Oak Trapdoor", "color": "#a97848", "placeable": False},
+    "oak_pressure_plate": {"label": "Oak Pressure Plate", "color": "#b58a56", "placeable": False},
+    "oak_button": {"label": "Oak Button", "color": "#b58a56", "placeable": False},
+    "stone_slab": {"label": "Cobblestone Slab", "color": "#686868", "placeable": False},
+    "stone_stairs": {"label": "Cobblestone Stairs", "color": "#686868", "placeable": False},
+    "stone_pressure_plate": {"label": "Stone Pressure Plate", "color": "#777777", "placeable": False},
+    "stone_button": {"label": "Stone Button", "color": "#777777", "placeable": False},
+    "torch": {"label": "Torch", "color": "#e7b840", "placeable": False},
+    "bowl": {"label": "Bowl", "color": "#9e7548", "placeable": False},
+    "sign": {"label": "Oak Sign", "color": "#b58a56", "placeable": False},
+    "boat": {"label": "Oak Boat", "color": "#9e7548", "placeable": False},
+    "coal_block": {"label": "Block of Coal", "color": "#252527", "placeable": False},
+    "redstone_block": {"label": "Block of Redstone", "color": "#ad1b13", "placeable": False},
+}
+
+CRAFTING_RECIPES = {
+    "planks": {"category": "building", "name": "Oak Planks", "size": 2, "pattern": ["wood", None, None, None], "requires": {"wood": 1}, "output": {"item": "planks", "count": 4}},
+    "sticks": {"category": "misc", "name": "Sticks", "size": 2, "pattern": ["planks", None, "planks", None], "requires": {"planks": 2}, "output": {"item": "sticks", "count": 4}},
+    "crafting_table": {"category": "building", "name": "Crafting Table", "size": 2, "pattern": ["planks", "planks", "planks", "planks"], "requires": {"planks": 4}, "output": {"item": "crafting_table", "count": 1}},
+    "wooden_pickaxe": {"category": "equipment", "name": "Wooden Pickaxe", "size": 3, "pattern": ["planks", "planks", "planks", None, "sticks", None, None, "sticks", None], "requires": {"planks": 3, "sticks": 2}, "output": {"item": "wooden_pickaxe", "count": 1}},
+    "wooden_axe": {"category": "equipment", "name": "Wooden Axe", "size": 3, "pattern": ["planks", "planks", None, "planks", "sticks", None, None, "sticks", None], "requires": {"planks": 3, "sticks": 2}, "output": {"item": "wooden_axe", "count": 1}},
+    "wooden_shovel": {"category": "equipment", "name": "Wooden Shovel", "size": 3, "pattern": [None, "planks", None, None, "sticks", None, None, "sticks", None], "requires": {"planks": 1, "sticks": 2}, "output": {"item": "wooden_shovel", "count": 1}},
+    "wooden_sword": {"category": "equipment", "name": "Wooden Sword", "size": 3, "pattern": [None, "planks", None, None, "planks", None, None, "sticks", None], "requires": {"planks": 2, "sticks": 1}, "output": {"item": "wooden_sword", "count": 1}},
+    "wooden_hoe": {"category": "equipment", "name": "Wooden Hoe", "size": 3, "pattern": ["planks", "planks", None, None, "sticks", None, None, "sticks", None], "requires": {"planks": 2, "sticks": 2}, "output": {"item": "wooden_hoe", "count": 1}},
+    "stone_pickaxe": {"category": "equipment", "name": "Stone Pickaxe", "size": 3, "pattern": ["cobble", "cobble", "cobble", None, "sticks", None, None, "sticks", None], "requires": {"cobble": 3, "sticks": 2}, "output": {"item": "stone_pickaxe", "count": 1}},
+    "stone_axe": {"category": "equipment", "name": "Stone Axe", "size": 3, "pattern": ["cobble", "cobble", None, "cobble", "sticks", None, None, "sticks", None], "requires": {"cobble": 3, "sticks": 2}, "output": {"item": "stone_axe", "count": 1}},
+    "stone_shovel": {"category": "equipment", "name": "Stone Shovel", "size": 3, "pattern": [None, "cobble", None, None, "sticks", None, None, "sticks", None], "requires": {"cobble": 1, "sticks": 2}, "output": {"item": "stone_shovel", "count": 1}},
+    "stone_sword": {"category": "equipment", "name": "Stone Sword", "size": 3, "pattern": [None, "cobble", None, None, "cobble", None, None, "sticks", None], "requires": {"cobble": 2, "sticks": 1}, "output": {"item": "stone_sword", "count": 1}},
+    "stone_hoe": {"category": "equipment", "name": "Stone Hoe", "size": 3, "pattern": ["cobble", "cobble", None, None, "sticks", None, None, "sticks", None], "requires": {"cobble": 2, "sticks": 2}, "output": {"item": "stone_hoe", "count": 1}},
+    "chest": {"category": "building", "name": "Chest", "size": 3, "pattern": ["planks", "planks", "planks", "planks", None, "planks", "planks", "planks", "planks"], "requires": {"planks": 8}, "output": {"item": "chest", "count": 1}},
+    "furnace": {"category": "building", "name": "Furnace", "size": 3, "pattern": ["cobble", "cobble", "cobble", "cobble", None, "cobble", "cobble", "cobble", "cobble"], "requires": {"cobble": 8}, "output": {"item": "furnace", "count": 1}},
+    "ladder": {"category": "building", "name": "Ladder", "size": 3, "pattern": ["sticks", None, "sticks", "sticks", "sticks", "sticks", "sticks", None, "sticks"], "requires": {"sticks": 7}, "output": {"item": "ladder", "count": 3}},
+    "wooden_door": {"name": "Wooden Door", "size": 3, "category": "building", "pattern": ["planks", "planks", None, "planks", "planks", None, "planks", "planks", None], "requires": {"planks": 6}, "output": {"item": "wooden_door", "count": 3}},
+    "oak_slab": {"name": "Oak Slabs", "size": 3, "category": "building", "pattern": [None, None, None, None, None, None, "planks", "planks", "planks"], "requires": {"planks": 3}, "output": {"item": "oak_slab", "count": 6}},
+    "oak_stairs": {"name": "Oak Stairs", "size": 3, "category": "building", "pattern": ["planks", None, None, "planks", "planks", None, "planks", "planks", "planks"], "requires": {"planks": 6}, "output": {"item": "oak_stairs", "count": 4}},
+    "oak_fence": {"name": "Oak Fence", "size": 3, "category": "building", "pattern": [None, None, None, "planks", "sticks", "planks", "planks", "sticks", "planks"], "requires": {"planks": 4, "sticks": 2}, "output": {"item": "oak_fence", "count": 3}},
+    "oak_fence_gate": {"name": "Oak Fence Gate", "size": 3, "category": "building", "pattern": [None, None, None, "sticks", "planks", "sticks", "sticks", "planks", "sticks"], "requires": {"planks": 2, "sticks": 4}, "output": {"item": "oak_fence_gate", "count": 1}},
+    "oak_trapdoor": {"name": "Oak Trapdoors", "size": 3, "category": "building", "pattern": [None, None, None, "planks", "planks", "planks", "planks", "planks", "planks"], "requires": {"planks": 6}, "output": {"item": "oak_trapdoor", "count": 2}},
+    "oak_pressure_plate": {"name": "Oak Pressure Plate", "size": 2, "category": "redstone", "pattern": [None, None, "planks", "planks"], "requires": {"planks": 2}, "output": {"item": "oak_pressure_plate", "count": 1}},
+    "oak_button": {"name": "Oak Button", "size": 2, "category": "redstone", "pattern": ["planks", None, None, None], "requires": {"planks": 1}, "output": {"item": "oak_button", "count": 1}},
+    "stone_slab": {"name": "Cobblestone Slabs", "size": 3, "category": "building", "pattern": [None, None, None, None, None, None, "cobble", "cobble", "cobble"], "requires": {"cobble": 3}, "output": {"item": "stone_slab", "count": 6}},
+    "stone_stairs": {"name": "Cobblestone Stairs", "size": 3, "category": "building", "pattern": ["cobble", None, None, "cobble", "cobble", None, "cobble", "cobble", "cobble"], "requires": {"cobble": 6}, "output": {"item": "stone_stairs", "count": 4}},
+    "stone_pressure_plate": {"name": "Stone Pressure Plate", "size": 2, "category": "redstone", "pattern": [None, None, "cobble", "cobble"], "requires": {"cobble": 2}, "output": {"item": "stone_pressure_plate", "count": 1}},
+    "stone_button": {"name": "Stone Button", "size": 2, "category": "redstone", "pattern": ["cobble", None, None, None], "requires": {"cobble": 1}, "output": {"item": "stone_button", "count": 1}},
+    "torch": {"name": "Torches", "size": 2, "category": "building", "pattern": ["coal", None, "sticks", None], "requires": {"coal": 1, "sticks": 1}, "output": {"item": "torch", "count": 4}},
+    "bowl": {"name": "Bowls", "size": 3, "category": "misc", "pattern": [None, None, None, "planks", None, "planks", None, "planks", None], "requires": {"planks": 3}, "output": {"item": "bowl", "count": 4}},
+    "sign": {"name": "Oak Signs", "size": 3, "category": "building", "pattern": ["planks", "planks", "planks", "planks", "planks", "planks", None, "sticks", None], "requires": {"planks": 6, "sticks": 1}, "output": {"item": "sign", "count": 3}},
+    "boat": {"name": "Oak Boat", "size": 3, "category": "misc", "pattern": [None, None, None, "planks", None, "planks", "planks", "planks", "planks"], "requires": {"planks": 5}, "output": {"item": "boat", "count": 1}},
+    "coal_block": {"name": "Block of Coal", "size": 3, "category": "building", "pattern": ["coal", "coal", "coal", "coal", "coal", "coal", "coal", "coal", "coal"], "requires": {"coal": 9}, "output": {"item": "coal_block", "count": 1}},
+    "redstone_block": {"name": "Block of Redstone", "size": 3, "category": "redstone", "pattern": ["redstone", "redstone", "redstone", "redstone", "redstone", "redstone", "redstone", "redstone", "redstone"], "requires": {"redstone": 9}, "output": {"item": "redstone_block", "count": 1}},
+}
+
+BLOCK_DROPS = {
+    "grass": ("dirt", 1), "dirt": ("dirt", 1), "stone": ("cobble", 1), "cobble": ("cobble", 1),
+    "wood": ("wood", 1), "spruce": ("wood", 1), "acacia": ("wood", 1), "jungle_wood": ("wood", 1),
+    "sand": ("sand", 1), "sandstone": ("sandstone", 1), "red_sand": ("red_sand", 1), "terracotta": ("terracotta", 1),
+    "podzol": ("dirt", 1), "deepslate": ("cobble", 1), "coal_ore": ("coal", 1), "iron_ore": ("raw_iron", 1),
+    "planks": ("planks", 1), "crafting_table": ("crafting_table", 1), "furnace": ("furnace", 1), "chest": ("chest", 1),
+    "redstone": ("redstone", 1), "lamp": ("lamp", 1), "lever": ("lever", 1), "glass": ("glass", 1),
+}
 
 
 def uid(n: int = 8) -> str:
@@ -454,6 +555,7 @@ class Player:
     last_edit: float = 0.0
     last_chat: float = 0.0
     respawn_at: float = 0.0
+    inventory: Dict[str, int] = field(default_factory=dict)
 
     def public(self):
         d = asdict(self)
@@ -605,7 +707,7 @@ class Room:
             if spawn_clear:
                 continue
             tree_score = voxel_hash(wx // 2, wz // 2, 4)
-            threshold = {"forest": .925, "taiga": .94, "jungle": .885, "savanna": .975, "plains": .992, "meadow": .993, "swamp": .972}.get(biome, 2.0)
+            threshold = {"forest": .965, "taiga": .972, "jungle": .945, "savanna": .988, "plains": .997, "meadow": .997, "swamp": .988}.get(biome, 2.0)
             if tree_score < threshold:
                 continue
             trunk = "wood"
@@ -676,6 +778,40 @@ class Room:
         key = f"{x}:{y}:{z}"
         self.blocks[key] = Block(key, x, y, z, typ, owner)
         return self.blocks[key]
+
+    def add_inventory(self, p: Player, item: str, count: int = 1):
+        if count <= 0 or item not in MINECRAFT_ITEMS:
+            return
+        p.inventory[item] = p.inventory.get(item, 0) + count
+
+    def take_inventory(self, p: Player, item: str, count: int = 1) -> bool:
+        if count <= 0:
+            return True
+        have = p.inventory.get(item, 0)
+        if have < count:
+            return False
+        left = have - count
+        if left:
+            p.inventory[item] = left
+        else:
+            p.inventory.pop(item, None)
+        return True
+
+    def can_craft(self, p: Player, recipe: dict) -> bool:
+        return all(p.inventory.get(item, 0) >= count for item, count in recipe["requires"].items())
+
+    def craft(self, p: Player, recipe_id: str, scope: str = "inventory") -> Optional[dict]:
+        recipe = CRAFTING_RECIPES.get(recipe_id)
+        if not recipe or recipe.get("hidden"):
+            return None
+        max_size = 3 if scope == "table" else 2
+        if recipe["size"] > max_size or not self.can_craft(p, recipe):
+            return None
+        for item, count in recipe["requires"].items():
+            self.take_inventory(p, item, count)
+        out = recipe["output"]
+        self.add_inventory(p, out["item"], out["count"])
+        return {"recipe": recipe_id, "item": out["item"], "count": out["count"]}
 
     def all_collision_boxes(self) -> Iterable[dict]:
         yield from self.world_cfg["boxes"]
@@ -951,7 +1087,7 @@ async def terms():
 async def health():
     return {
         "ok": True,
-        "version": "2.7.0",
+        "version": "3.0.0",
         "rooms": len(rooms),
         "players": sum(len(r.players) for r in rooms.values()),
     }
@@ -959,12 +1095,12 @@ async def health():
 
 @app.get("/api/config")
 async def config():
-    return JSONResponse({"classes": CLASSES, "weapons": WEAPONS, "worlds": public_worlds(), "world_order": WORLD_ORDER, "modes": sorted(MODES)})
+    return JSONResponse({"classes": CLASSES, "weapons": WEAPONS, "worlds": public_worlds(), "world_order": WORLD_ORDER, "modes": sorted(MODES), "minecraft_items": MINECRAFT_ITEMS, "crafting_recipes": CRAFTING_RECIPES})
 
 
 @app.get("/api/site-config")
 async def site_config():
-    return JSONResponse({"ads": ad_config(), "version": "2.7.0", "brand": "Blockfront Worlds"})
+    return JSONResponse({"ads": ad_config(), "version": "3.0.0", "brand": "Blockfront Worlds"})
 
 
 @app.get("/api/rooms")
@@ -1087,6 +1223,20 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                 if text:
                     await room.emit({"t": "chat", "name": p.name, "text": text})
 
+            elif t == "craft" and p.alive and room.world == "voxel":
+                recipe_id = str(msg.get("recipe", ""))
+                scope = "table" if str(msg.get("scope", "inventory")) == "table" else "inventory"
+                result = room.craft(p, recipe_id, scope)
+                if result:
+                    await ws.send_json({"t": "craft_result", **result, "inventory": p.inventory})
+                else:
+                    await ws.send_json({"t": "craft_error", "recipe": recipe_id, "inventory": p.inventory})
+
+            elif t == "drop_item" and p.alive and room.world == "voxel":
+                item = str(msg.get("item", ""))
+                if item in MINECRAFT_ITEMS and room.take_inventory(p, item, 1):
+                    await ws.send_json({"t": "inventory", "inventory": p.inventory})
+
             elif t == "block_break" and p.alive and room.world == "voxel":
                 now = time.time()
                 if now - p.last_edit < .12:
@@ -1107,6 +1257,16 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                 p.score += 5
                 if removed:
                     await room.emit({"t": "block_remove", "key": key})
+                    drop = BLOCK_DROPS.get(removed.type)
+                    if drop:
+                        item, count = drop
+                        room.add_inventory(p, item, count)
+                        await ws.send_json({"t": "item_pickup", "item": item, "count": count, "at": [removed.x, removed.y, removed.z], "inventory": p.inventory})
+                    elif removed.type.endswith("leaves") or removed.type == "leaves":
+                        # Leaves usually disappear without a block drop in this lightweight survival layer.
+                        if random.random() < .12:
+                            room.add_inventory(p, "sticks", 1)
+                            await ws.send_json({"t": "item_pickup", "item": "sticks", "count": 1, "at": [removed.x, removed.y, removed.z], "inventory": p.inventory})
                     if removed.type in {"redstone", "lamp", "lever"}:
                         await room.emit_blocks(radius=28)
 
@@ -1116,7 +1276,7 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                     continue
                 p.last_edit = now
                 typ = str(msg.get("type", "dirt")).lower()
-                if typ not in BLOCK_TYPES:
+                if typ not in BLOCK_TYPES or p.inventory.get(typ, 0) <= 0:
                     continue
                 raw_pos = [float(v) for v in msg.get("pos", [0, 1, 0])[:3]]
                 x = grid_round(raw_pos[0], 2)
@@ -1135,8 +1295,10 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                 if any(abs(q.x - x) < 1.25 and abs((q.y + .9) - y) < 1.7 and abs(q.z - z) < 1.25 for q in room.players.values() if q.alive):
                     continue
                 placed = room.add_block(x, y, z, typ, p.id)
+                room.take_inventory(p, typ, 1)
                 room.recompute_power()
                 await room.emit({"t": "block_add", "block": placed.public()})
+                await ws.send_json({"t": "inventory", "inventory": p.inventory})
                 if typ in {"redstone", "lamp", "lever"}:
                     await room.emit_blocks(radius=28)
 

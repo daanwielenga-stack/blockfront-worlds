@@ -5,6 +5,8 @@ from app import (
     CLAN_DEFENSE_COUNTS,
     CLAN_WALL_COUNTS,
     CLASSES,
+    CRAFTING_RECIPES,
+    MINECRAFT_ITEMS,
     WEAPONS,
     WORLD_ORDER,
     WORLDS,
@@ -28,7 +30,7 @@ def test_health():
     assert r.status_code == 200
     body = r.json()
     assert body['ok'] is True
-    assert body['version'] == '2.7.0'
+    assert body['version'] == '3.0.0'
 
 
 def test_config_contains_five_worlds():
@@ -220,3 +222,36 @@ def test_voxel_prefetch_returns_mergeable_patch():
         assert found is not None
         assert found['radius'] <= 36
         assert found['blocks']
+
+
+def test_minecraft_survival_crafting_catalog():
+    assert len(CRAFTING_RECIPES) >= 30
+    assert CRAFTING_RECIPES['planks']['size'] == 2
+    assert CRAFTING_RECIPES['crafting_table']['size'] == 2
+    assert CRAFTING_RECIPES['wooden_pickaxe']['size'] == 3
+    assert CRAFTING_RECIPES['furnace']['requires']['cobble'] == 8
+    assert CRAFTING_RECIPES['torch']['output'] == {'item': 'torch', 'count': 4}
+    assert 'stone_sword' in MINECRAFT_ITEMS
+
+
+def test_minecraft_break_adds_inventory_and_craft_consumes_materials():
+    room = Room('CRAFT', 'FFA', 'voxel')
+    p = Player(id='crafter', name='Crafter', klass='Runner', team='Alpha', x=0, y=10, z=0)
+    room.add_inventory(p, 'wood', 1)
+    result = room.craft(p, 'planks', 'inventory')
+    assert result['item'] == 'planks' and result['count'] == 4
+    assert p.inventory.get('wood', 0) == 0
+    assert p.inventory.get('planks', 0) == 4
+    result = room.craft(p, 'crafting_table', 'inventory')
+    assert result['item'] == 'crafting_table' and result['count'] == 1
+    assert p.inventory.get('crafting_table', 0) == 1
+
+
+def test_three_by_three_recipe_requires_crafting_table_scope():
+    room = Room('TABLE', 'FFA', 'voxel')
+    p = Player(id='crafter2', name='Crafter2', klass='Runner', team='Alpha', x=0, y=10, z=0)
+    room.add_inventory(p, 'planks', 3)
+    room.add_inventory(p, 'sticks', 2)
+    assert room.craft(p, 'wooden_pickaxe', 'inventory') is None
+    crafted = room.craft(p, 'wooden_pickaxe', 'table')
+    assert crafted['item'] == 'wooden_pickaxe' and crafted['count'] == 1
