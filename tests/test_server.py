@@ -32,7 +32,7 @@ def test_health():
     assert r.status_code == 200
     body = r.json()
     assert body['ok'] is True
-    assert body['version'] == '3.2.0'
+    assert body['version'] == '3.3.0'
 
 
 def test_config_contains_five_worlds():
@@ -275,3 +275,55 @@ def test_clan_glb_assets_are_present_and_valid():
         data = (model_dir / f'{name}.glb').read_bytes()
         assert data[:4] == b'glTF'
         assert len(data) > 1000
+
+
+def test_voxel_placement_skips_occupied_adjacent_cell():
+    room = Room('PLACEFREE', 'FFA', 'voxel')
+    p = Player(id='placer', name='Placer', klass='Runner', team='Alpha', x=0, y=12, z=0)
+    room.players[p.id] = p
+    base = room.add_block(0, 11, 0, 'stone', 'world')
+    room.add_block(0, 13, 0, 'stone', 'world')
+    target = room.resolve_block_placement(p, [0, 13, 0], base.key, [0, 1, 0])
+    assert target is not None
+    x, y, z, key = target
+    assert (x, z) == (0, 0)
+    assert y >= 15
+    assert key not in room.blocks
+
+
+def test_occupied_placement_message_removed():
+    source = Path('app.py').read_text(encoding='utf-8')
+    js = Path('static/game.js').read_text(encoding='utf-8')
+    assert 'That space is occupied.' not in source
+    assert 'That block face has no free space' not in js
+    assert 'function localFreePlacement' in js
+    assert 'request_key:key' in js
+
+
+def test_websocket_placement_stacks_past_occupied_target():
+    rooms.clear()
+    with client.websocket_connect('/ws/PLACEWS?mode=FFA&world=voxel&name=Builder&klass=Runner') as ws:
+        welcome = ws.receive_json()
+        assert welcome['t'] == 'welcome'
+        room = rooms[('PLACEWS', 'voxel')]
+        player = room.players[welcome['id']]
+        room.add_inventory(player, 'dirt', 3)
+        x, z = int(player.x), int(player.z)
+        col = [b for b in room.blocks.values() if b.x == x and b.z == z]
+        base = max(col, key=lambda b: b.y)
+        occupied = room.add_block(base.x, base.y + 2, base.z, 'stone', 'world')
+        request_key = f"{base.x}:{base.y + 2}:{base.z}"
+        ws.send_json({
+            't': 'block_place', 'type': 'dirt',
+            'pos': [base.x, base.y + 2, base.z],
+            'against_key': base.key, 'face': [0, 1, 0], 'request_key': request_key,
+        })
+        placed = None
+        for _ in range(30):
+            msg = ws.receive_json()
+            if msg.get('t') == 'block_add' and msg.get('placer_id') == player.id:
+                placed = msg
+                break
+        assert placed is not None
+        assert placed['block']['y'] > occupied.y
+        assert placed['request_key'] == request_key

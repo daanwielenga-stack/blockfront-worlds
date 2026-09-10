@@ -797,7 +797,7 @@ function handleMessage(m){
   else if(m.t==='craft_result'){syncInventory(m.inventory||{});toast(`Crafted ${m.count||1}× ${mcItemLabel(m.item)}`);playBlockSound('place')}
   else if(m.t==='craft_error'){syncInventory(m.inventory||state.inventory);toast('Not enough materials')}
   else if(m.t==='block_remove'){if(state.dynamicBlocks.delete(m.key)){if(state.miningSentKey===m.key)state.miningSentKey=null;state.voxelRenderKey='';state.voxelHorizonKey='';rebuildVoxelRender(true)}}
-  else if(m.t==='block_add'){const b=m.block;if(b?.key){state.pendingPlacements.delete(b.key);state.dynamicBlocks.set(b.key,b);state.voxelRenderKey='';state.voxelHorizonKey='';rebuildVoxelRender(true)}}
+  else if(m.t==='block_add'){const b=m.block,requestKey=m.request_key||'';if(requestKey&&state.pendingPlacements.has(requestKey)){state.pendingPlacements.delete(requestKey);if(requestKey!==b?.key)state.dynamicBlocks.delete(requestKey)}if(b?.key){state.pendingPlacements.delete(b.key);state.dynamicBlocks.set(b.key,b);state.voxelRenderKey='';state.voxelHorizonKey='';rebuildVoxelRender(true)}}
   else if(m.t==='block_place_error'){let key=m.key||'';if(!key&&state.pendingPlacements.size)key=[...state.pendingPlacements.keys()].at(-1);if(key&&state.pendingPlacements.has(key)){state.pendingPlacements.delete(key);state.dynamicBlocks.delete(key);state.voxelRenderKey='';state.voxelHorizonKey='';rebuildVoxelRender(true)}toast(m.message||'Cannot place block there')}
   else if(m.t==='blocks')syncBlocks(m.blocks||[],true)
   else if(m.t==='blocks_patch')syncBlocks(m.blocks||[],false)
@@ -952,18 +952,27 @@ function placementNormal(hit){
   return new THREE.Vector3(0,0,Math.sign(dz)||1);
 }
 function fallbackPlacementTarget(){const origin=camera.getWorldPosition(new THREE.Vector3()),dir=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);for(let d=2;d<=7;d+=.35){const p=origin.clone().addScaledVector(dir,d),gx=Math.round(p.x/2)*2,gz=Math.round(p.z/2)*2;let gy=Math.round((p.y-1)/2)*2+1;for(let oy=5;oy>=-5;oy-=2){const key=`${gx}:${gy+oy}:${gz}`;const b=state.dynamicBlocks.get(key);if(b)return [b.x,b.y+2,b.z]}const surface=voxelFallbackGround(gx,gz);if(Math.abs(p.y-surface)<1.4)return [gx,Math.round((surface+1-1)/2)*2+1,gz]}return null}
+function localFreePlacement(b,n){
+  // If the adjacent cell is already occupied locally, keep moving outward from the
+  // clicked face. This makes right-click mean “add a block onto this structure”.
+  for(let step=1;step<=6;step++){
+    const x=b.x+n.x*2*step,y=b.y+n.y*2*step,z=b.z+n.z*2*step,key=`${x}:${y}:${z}`;
+    if(!state.dynamicBlocks.has(key))return [x,y,z];
+  }
+  for(let step=1;step<=4;step++){const x=b.x,y=b.y+2*step,z=b.z,key=`${x}:${y}:${z}`;if(!state.dynamicBlocks.has(key))return [x,y,z]}
+  return [b.x+n.x*2,b.y+n.y*2,b.z+n.z*2];
+}
 function placeBlock(item=mcSelectedItem()){
   if(!item||!mcItemMeta(item).placeable||mcInventoryCount(item)<=0){toast('Select a placeable block first');return}
   const hit=blockRay();let pos=null,againstKey=null,face=null;
-  if(hit?.block){
-    const b=hit.block,n=placementNormal(hit);againstKey=hit.blockKey;face=[n.x,n.y,n.z];pos=[b.x+n.x*2,b.y+n.y*2,b.z+n.z*2];
-  }else pos=fallbackPlacementTarget();
+  if(hit?.block){const b=hit.block,n=placementNormal(hit);againstKey=hit.blockKey;face=[n.x,n.y,n.z];pos=localFreePlacement(b,n)}
+  else pos=fallbackPlacementTarget();
   if(!pos){toast('Aim at a nearby block face');return}
   const x=Math.round(pos[0]/2)*2,z=Math.round(pos[2]/2)*2,y=Math.round((pos[1]-1)/2)*2+1,key=`${x}:${y}:${z}`;
-  if(state.dynamicBlocks.has(key)){toast('That block face has no free space');return}
   const optimistic={key,x,y,z,type:item,owner:state.id,powered:false};state.dynamicBlocks.set(key,optimistic);state.pendingPlacements.set(key,optimistic);state.voxelRenderKey='';state.voxelHorizonKey='';rebuildVoxelRender(true);
-  wsSend({t:'block_place',pos:[x,y,z],type:item,against_key:againstKey,face});
+  wsSend({t:'block_place',pos:[x,y,z],type:item,against_key:againstKey,face,request_key:key});
 }
+
 function useBlock(){const hit=blockRay();if(hit?.blockKey)wsSend({t:'block_use',key:hit.blockKey})}
 function toggleBuildMode(){if(state.world!=='voxel'){toast('Voxel tools are only available in Voxel Frontier');return}setMinecraftHotbar(state.mcHotbar===0?1:0)}
 function cycleBlock(){if(state.world==='voxel')setMinecraftHotbar((state.mcHotbar+1)%MC_HOTBAR_SIZE)}

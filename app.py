@@ -21,7 +21,7 @@ STATIC = ROOT / "static"
 
 logger = logging.getLogger("blockfront")
 
-app = FastAPI(title="Blockfront Worlds", version="3.2.0")
+app = FastAPI(title="Blockfront Worlds", version="3.3.0")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
@@ -800,6 +800,76 @@ class Room:
     def can_craft(self, p: Player, recipe: dict) -> bool:
         return all(p.inventory.get(item, 0) >= count for item, count in recipe["requires"].items())
 
+    def player_occupies_voxel(self, x: int, y: int, z: int) -> bool:
+        """True only when a new 2x2x2 cube would actually intersect a living player."""
+        return any(
+            abs(q.x - x) < .82
+            and abs((q.y + .9) - y) < 1.72
+            and abs(q.z - z) < .82
+            for q in self.players.values()
+            if q.alive
+        )
+
+    def resolve_block_placement(self, p: Player, raw_pos, against_key: str = "", face=None):
+        """Find a free reachable cube next to the clicked block instead of rejecting occupied cells."""
+        raw = [float(v) for v in list(raw_pos or [0, 1, 0])[:3]]
+        while len(raw) < 3:
+            raw.append(0.0)
+        rx = grid_round(raw[0], 2)
+        rz = grid_round(raw[2], 2)
+        ry = int(round((raw[1] - 1) / 2) * 2 + 1)
+
+        against = self.blocks.get(str(against_key or ""))
+        direction = None
+        if against is not None and isinstance(face, list) and len(face) >= 3:
+            vals = [float(face[i]) for i in range(3)]
+            axis = max(range(3), key=lambda i: abs(vals[i]))
+            step = 1 if vals[axis] >= 0 else -1
+            direction = (step if axis == 0 else 0, step if axis == 1 else 0, step if axis == 2 else 0)
+
+        candidates = []
+        seen = set()
+
+        def offer(x, y, z):
+            x = grid_round(x, 2)
+            z = grid_round(z, 2)
+            y = int(round((y - 1) / 2) * 2 + 1)
+            if not (VOXEL_MIN_Y <= y <= VOXEL_MAX_Y):
+                return
+            key = f"{x}:{y}:{z}"
+            if key in seen:
+                return
+            seen.add(key)
+            candidates.append((x, y, z, key))
+
+        if against is not None and direction is not None:
+            fx, fy, fz = direction
+            # Always prefer the clicked face. If that cell is already occupied on the
+            # server (for example by hidden terrain), keep stacking outward instead.
+            for n in range(1, 7):
+                offer(against.x + fx * 2 * n, against.y + fy * 2 * n, against.z + fz * 2 * n)
+            # Fallbacks keep a right-click useful even near complex terrain/player edges.
+            for n in range(1, 5):
+                offer(against.x, against.y + 2 * n, against.z)
+            for n in range(1, 4):
+                for dx, dz in ((2*n, 0), (-2*n, 0), (0, 2*n), (0, -2*n)):
+                    offer(against.x + dx, against.y, against.z + dz)
+        else:
+            offer(rx, ry, rz)
+            for n in range(1, 6):
+                offer(rx, ry + 2*n, rz)
+
+        for x, y, z, key in candidates:
+            self.ensure_voxel_area(x, z, VOXEL_CHUNK_RADIUS)
+            if math.dist((p.x, p.y + 1.8, p.z), (x, y, z)) > 11.5:
+                continue
+            if key in self.blocks:
+                continue
+            if self.player_occupies_voxel(x, y, z):
+                continue
+            return x, y, z, key
+        return None
+
     def craft(self, p: Player, recipe_id: str, scope: str = "inventory") -> Optional[dict]:
         recipe = CRAFTING_RECIPES.get(recipe_id)
         if not recipe or recipe.get("hidden"):
@@ -1087,7 +1157,7 @@ async def terms():
 async def health():
     return {
         "ok": True,
-        "version": "3.2.0",
+        "version": "3.3.0",
         "rooms": len(rooms),
         "players": sum(len(r.players) for r in rooms.values()),
     }
@@ -1100,7 +1170,7 @@ async def config():
 
 @app.get("/api/site-config")
 async def site_config():
-    return JSONResponse({"ads": ad_config(), "version": "3.2.0", "brand": "Blockfront Worlds"})
+    return JSONResponse({"ads": ad_config(), "version": "3.3.0", "brand": "Blockfront Worlds"})
 
 
 @app.get("/api/rooms")
@@ -1272,53 +1342,36 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
 
             elif t == "block_place" and p.alive and room.world == "voxel":
                 now = time.time()
-                if now - p.last_edit < .12:
+                if now - p.last_edit < .08:
                     continue
                 p.last_edit = now
                 typ = str(msg.get("type", "dirt")).lower()
+                request_key = str(msg.get("request_key") or "")
                 if typ not in BLOCK_TYPES or p.inventory.get(typ, 0) <= 0:
-                    await ws.send_json({"t": "block_place_error", "message": "You do not have that block."})
+                    await ws.send_json({"t": "block_place_error", "key": request_key, "message": "You do not have that block."})
                     continue
-                raw_pos = [float(v) for v in msg.get("pos", [0, 1, 0])[:3]]
-                x = grid_round(raw_pos[0], 2)
-                z = grid_round(raw_pos[2], 2)
-                y = int(round((raw_pos[1] - 1) / 2) * 2 + 1)
-                # Prefer the authoritative server-side target block + clicked face.
-                # This keeps placement aligned with Minecraft's adjacent-face rule and
-                # prevents client/server disagreement when hidden terrain blocks exist.
-                against_key = str(msg.get("against_key") or "")
-                face = msg.get("face")
-                against = room.blocks.get(against_key) if against_key else None
-                if against is not None and isinstance(face, list) and len(face) >= 3:
-                    vals = [float(face[i]) for i in range(3)]
-                    axis = max(range(3), key=lambda i: abs(vals[i]))
-                    step = 1 if vals[axis] >= 0 else -1
-                    fx = step if axis == 0 else 0
-                    fy = step if axis == 1 else 0
-                    fz = step if axis == 2 else 0
-                    x = against.x + fx * 2
-                    y = against.y + fy * 2
-                    z = against.z + fz * 2
-                x = grid_round(x, 2)
-                z = grid_round(z, 2)
-                y = int(round((y - 1) / 2) * 2 + 1)
-                y = int(clamp(y, VOXEL_MIN_Y, VOXEL_MAX_Y))
-                room.ensure_voxel_area(x, z, VOXEL_CHUNK_RADIUS)
-                if math.dist((p.x, p.y + 3.0, p.z), (x, y, z)) > 9.5:
-                    await ws.send_json({"t": "block_place_error", "key": f"{x}:{y}:{z}", "message": "That block is too far away."})
+
+                resolved = room.resolve_block_placement(
+                    p, msg.get("pos", [0, 1, 0]), str(msg.get("against_key") or ""), msg.get("face")
+                )
+                if resolved is None:
+                    await ws.send_json({
+                        "t": "block_place_error",
+                        "key": request_key,
+                        "message": "Move a little closer and try that block face again.",
+                    })
                     continue
-                key = f"{x}:{y}:{z}"
-                if key in room.blocks or len(room.blocks) >= 60000:
-                    await ws.send_json({"t": "block_place_error", "key": key, "message": "That space is occupied."})
-                    continue
-                # Avoid trapping a player inside a new cube.
-                if any(abs(q.x - x) < .95 and abs((q.y + 1.8) - y) < 1.45 and abs(q.z - z) < .95 for q in room.players.values() if q.alive):
-                    await ws.send_json({"t": "block_place_error", "key": key, "message": "A player is occupying that space."})
-                    continue
+
+                x, y, z, key = resolved
                 placed = room.add_block(x, y, z, typ, p.id)
                 room.take_inventory(p, typ, 1)
                 room.recompute_power()
-                await room.emit({"t": "block_add", "block": placed.public()})
+                await room.emit({
+                    "t": "block_add",
+                    "block": placed.public(),
+                    "request_key": request_key,
+                    "placer_id": p.id,
+                })
                 await ws.send_json({"t": "inventory", "inventory": p.inventory})
                 if typ in {"redstone", "lamp", "lever"}:
                     await room.emit_blocks(radius=28)
