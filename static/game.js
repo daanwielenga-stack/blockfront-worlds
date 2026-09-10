@@ -9,9 +9,11 @@ const randCode=()=>Math.random().toString(36).slice(2,8).toUpperCase();
 const WORLD_ACCENTS={classic:'#f4b942',voxel:'#79c64a',stadium:'#36c76c',battle:'#b067ff',clan:'#e5a93a'};
 const BLOCK_TYPES=['dirt','stone','wood','glass','redstone','lamp','lever'];
 const BLOCK_COLORS={grass:'#6fb24c',dirt:'#8a5a32',stone:'#777777',wood:'#9b6b3f',glass:'#9ed7e5',redstone:'#8f1d1d',lamp:'#d7a632',lever:'#74604b',leaves:'#3f8d35',spruce:'#60452f',spruce_leaves:'#315f39',acacia:'#a85d32',acacia_leaves:'#6b873a',jungle_wood:'#795634',jungle_leaves:'#2e8b3f',sand:'#d9c681',sandstone:'#c9b26f',snow:'#f2f6f8',ice:'#91c9e8',red_sand:'#b75e36',terracotta:'#a9573b',podzol:'#72523a',cobble:'#686868',planks:'#b58a56',bedrock:'#343434',deepslate:'#45454a',coal_ore:'#3b3b3b',iron_ore:'#8c7568'};
-const VOXEL_RENDER_RADIUS=62;
-const VOXEL_HORIZON_RADIUS=360;
-const VOXEL_HORIZON_STEP=12;
+const VOXEL_RENDER_RADIUS=44;
+const VOXEL_SAFETY_RADIUS=118;
+const VOXEL_SAFETY_STEP=6;
+const VOXEL_HORIZON_RADIUS=420;
+const VOXEL_HORIZON_STEP=18;
 const CLAN_TH_COUNT=17;
 const MC_HOTBAR_SIZE=9;
 
@@ -22,7 +24,7 @@ const state={
   settings:{sens:+(localStorage.getItem('bf_sens')||1),fov:+(localStorage.getItem('bf_fov')||82),bob:localStorage.getItem('bf_bob')!=='0',quality:localStorage.getItem('bf_quality')!=='0'},
   hp:100,alive:true,ammo:30,reloading:false,lastShot:0,players:new Map(),killfeed:[],keys:{},mouseDown:false,ads:false,
   yaw:0,pitch:0,pos:new THREE.Vector3(0,0,0),vel:new THREE.Vector3(),grounded:true,slide:0,crouched:false,jumpLatch:false,landGrace:0,speedBoost:1,chat:false,
-  remote:new Map(),mobs:new Map(),ping:0,currentBoxes:[],dynamicBlocks:new Map(),buildMode:false,blockIndex:0,mcHotbar:0,mcSprint:false,lastWDown:0,stepAt:0,worldTime:0,streamChunk:'',voxelRenderKey:'',voxelHorizonKey:'',clanRenderKey:'',milanProjectiles:[],miningHeld:false,mining:null,miningSentKey:null,prefetchAt:0,prefetchX:0,prefetchZ:0,musicOn:localStorage.getItem('bf_music')!=='0',musicNextAt:0,musicStep:0,clanCollisionBoxes:[],clanPatrols:[]
+  remote:new Map(),mobs:new Map(),ping:0,currentBoxes:[],dynamicBlocks:new Map(),buildMode:false,blockIndex:0,mcHotbar:0,mcSprint:false,lastWDown:0,stepAt:0,worldTime:0,streamChunk:'',voxelRenderKey:'',voxelHorizonKey:'',clanRenderKey:'',milanProjectiles:[],miningHeld:false,mining:null,miningSentKey:null,prefetchAt:0,prefetchX:0,prefetchZ:0,musicOn:localStorage.getItem('bf_music')!=='0',musicNextAt:0,musicStep:0,clanCollisionBoxes:[],clanPatrols:[],voxelLastPrune:0,voxelLastHorizonBuild:0
 };
 
 let scene,camera,renderer,clock,weaponGroup,muzzle,worldGroup,streamGroup,dynamicGroup,remoteGroup,mobGroup,decorGroup,hardpointMesh;
@@ -30,6 +32,7 @@ let hemi,sun,moonLight,skySun,skyMoon,stars,stormRing;
 let cleanerBots=[];
 let guineaPig=null;
 let miningOverlay=null;
+let clanMusicFx=null;
 const raycaster=new THREE.Raycaster();
 const textureCache=new Map();
 
@@ -89,7 +92,8 @@ function buildWorld(id){
   const w=state.config.worlds[id];if(!w)return;
   clearGroup(worldGroup);clearGroup(streamGroup);clearGroup(decorGroup);clearGroup(dynamicGroup);clearGroup(mobGroup);state.dynamicBlocks.clear();state.mobs.clear();state.streamChunk='';state.voxelRenderKey='';state.voxelHorizonKey='';state.clanRenderKey='';state.clanCollisionBoxes=[];state.clanPatrols=[];state.mining=null;state.miningHeld=false;state.miningSentKey=null;state.musicNextAt=0;if(miningOverlay){scene.remove(miningOverlay);miningOverlay=null}guineaPig=null;
   renderer.shadowMap.enabled=state.settings.quality&&id!=='clan'&&id!=='voxel';sun.castShadow=renderer.shadowMap.enabled;
-  scene.background=color(w.sky);scene.fog=new THREE.Fog(color(w.fog),id==='voxel'?150:58,id==='voxel'?485:id==='clan'?300:id==='stadium'?145:125);hemi.intensity=2;sun.intensity=1.25;moonLight.intensity=0;stormRing=null;skySun=skyMoon=stars=null;
+  const ratioCap=id==='voxel'?1.0:id==='clan'?1.08:(state.settings.quality?1.45:1.05);renderer.setPixelRatio(Math.min(devicePixelRatio,ratioCap));
+  scene.background=color(w.sky);scene.fog=new THREE.Fog(color(w.fog),id==='voxel'?190:58,id==='voxel'?560:id==='clan'?260:id==='stadium'?145:125);hemi.intensity=2;sun.intensity=1.25;moonLight.intensity=0;stormRing=null;skySun=skyMoon=stars=null;
   buildGround(w);for(const b of w.boxes)addStyledWorldBox(w,b);buildDecor(w);updateStreamingWorld(true);state.currentBoxes=[...w.boxes];
   $('#voxelHud').classList.toggle('hidden',id!=='voxel');$('#dayNight').classList.toggle('hidden',id!=='voxel');state.buildMode=false;if(id==='voxel')state.mcHotbar=0;updateBuildHud();refreshWorldUI();createWeapon();
 }
@@ -499,7 +503,7 @@ function updateClanPatrols(){
   for(const p of state.clanPatrols){const a=p.phase+t*p.speed;p.g.position.set(p.cx+Math.cos(a)*p.rad,.08+Math.abs(Math.sin(t*4+p.bob))*.08,p.cz+Math.sin(a*.91)*p.rad);p.g.rotation.y=-a+Math.PI/2}
 }
 function renderClanVillage(group,th,cx,cz){
-  const wallCount=clanWallCount(th),entries=clanDefenseEntries(th),slots=clanDefenseSlots(entries.length,th);
+  const entries=clanDefenseEntries(th),slots=clanDefenseSlots(entries.length,th);
   // Local paths, but the grass itself is a single global plane.
   const pathMat=new THREE.MeshToonMaterial({color:0xd8c59d,side:THREE.DoubleSide});
   for(const [px,pz,w,h] of [[0,13,6,22],[0,-13,6,22],[13,0,22,6],[-13,0,22,6]]){const path=new THREE.Mesh(new THREE.PlaneGeometry(w,h),pathMat);path.rotation.x=-Math.PI/2;path.position.set(cx+px,.005,cz+pz);group.add(path)}
@@ -509,7 +513,6 @@ function renderClanVillage(group,th,cx,cz){
   if(th>=2)clanBarracks(group,cx-5,cz+5,.1);if(th>=2)clanCastle(group,cx+5,cz+5);if(th>=3)clanCamp(group,cx-18,cz+18);
   for(let i=0;i<4;i++){const a=i/4*Math.PI*2+.4,rr=27;clanTree(group,cx+Math.cos(a)*rr,cz+Math.sin(a)*rr,.55)}
   spawnClanPatrols(group,th,cx,cz);
-  const sign=makeLabel(`TH ${th}  •  ${wallCount} walls  •  ${entries.length} defenses`);sign.position.set(cx,3.0,cz+27);sign.scale.set(5.8,1.08,1);group.add(sign);
 }
 function renderClanVillageLOD(group,th,cx,cz){
   const t=clanTheme(th),g=new THREE.Group();g.position.set(cx,0,cz);group.add(g);
@@ -521,7 +524,7 @@ function clanVillageLayout(){const layout=state.config?.worlds?.clan?.town_hall_
 function updateClanProgressionRender(force=false){
   if(state.world!=='clan')return;const anchor=state.playing?state.pos:camera.position,layout=clanVillageLayout();if(!layout.length)return;
   const ranked=[...layout].sort((a,b)=>((anchor.x-a.x)**2+(anchor.z-a.z)**2)-((anchor.x-b.x)**2+(anchor.z-b.z)**2));
-  const detailed=ranked[0],lod=ranked.slice(1,5),key=`${detailed.th}|${lod.map(v=>v.th).join(',')}`;if(!force&&key===state.clanRenderKey)return;
+  const detailed=ranked[0],lod=ranked.slice(1,3),key=`${detailed.th}|${lod.map(v=>v.th).join(',')}`;if(!force&&key===state.clanRenderKey)return;
   state.clanRenderKey=key;state.clanCollisionBoxes=[];state.clanPatrols=[];clearGroup(streamGroup);renderClanVillage(streamGroup,detailed.th,detailed.x,detailed.z);for(const v of lod)renderClanVillageLOD(streamGroup,v.th,v.x,v.z);
 }
 
@@ -636,7 +639,8 @@ function handleMessage(m){
   else if(m.t==='mob_attack'){if(m.victim===state.id){state.hp=m.hp;damageFlash();updateHP()}}
   else if(m.t==='block_remove'){if(state.dynamicBlocks.delete(m.key)){if(state.miningSentKey===m.key)state.miningSentKey=null;state.voxelRenderKey='';state.voxelHorizonKey='';rebuildVoxelRender(true)}}
   else if(m.t==='block_add'){const b=m.block;if(b?.key){state.dynamicBlocks.set(b.key,b);state.voxelRenderKey='';rebuildVoxelRender(true)}}
-  else if(m.t==='blocks')syncBlocks(m.blocks||[])
+  else if(m.t==='blocks')syncBlocks(m.blocks||[],true)
+  else if(m.t==='blocks_patch')syncBlocks(m.blocks||[],false)
   else if(m.t==='error'){toast(m.message||'Server error');showMenu()}
   else if(m.t==='event')feed(`<span>${esc(m.text)}</span>`)
   else if(m.t==='chat')addChat(m.name,m.text)
@@ -668,13 +672,21 @@ function createMob(m){
 function updateScoreboard(players){const rows=[...players].sort((a,b)=>b.score-a.score);$('#scoreRows').innerHTML=rows.map((p,i)=>`<div class="score-row ${p.id===state.id?'me':''}"><span>${i+1}</span><b class="${p.team==='Alpha'?'alpha':p.team==='Bravo'?'bravo':''}">${esc(p.name)}</b><span>${esc(p.klass)}</span><span>${p.kills} K</span><span>${p.deaths} D</span></div>`).join('')}
 function updateHardpoint(i){const hp=state.config.worlds[state.world].hardpoints[i]||state.config.worlds[state.world].hardpoints[0];hardpointMesh.position.set(hp[0],.04,hp[2]);hardpointMesh.visible=true;const d=Math.hypot(state.pos.x-hp[0],state.pos.z-hp[2]);$('#hardpoint').classList.toggle('hidden',d>8)}
 
-function syncBlocks(blocks){state.dynamicBlocks.clear();for(const b of blocks)state.dynamicBlocks.set(b.key,b);state.prefetchX=state.pos.x;state.prefetchZ=state.pos.z;if(state.miningSentKey&&!state.dynamicBlocks.has(state.miningSentKey))state.miningSentKey=null;rebuildVoxelRender(true);rebuildColliders()}
+function pruneVoxelCache(force=false){
+  const now=performance.now();if(!force&&now-state.voxelLastPrune<1400)return;state.voxelLastPrune=now;
+  const keep=132,keep2=keep*keep,ax=state.pos.x,az=state.pos.z;
+  if(!force&&state.dynamicBlocks.size<10500)return;
+  for(const [key,b] of state.dynamicBlocks){if((b.x-ax)*(b.x-ax)+(b.z-az)*(b.z-az)>keep2)state.dynamicBlocks.delete(key)}
+}
+function syncBlocks(blocks,replace=true){
+  if(replace)state.dynamicBlocks.clear();for(const b of blocks)state.dynamicBlocks.set(b.key,b);state.prefetchX=state.pos.x;state.prefetchZ=state.pos.z;if(state.miningSentKey&&!state.dynamicBlocks.has(state.miningSentKey))state.miningSentKey=null;pruneVoxelCache();state.voxelRenderKey='';rebuildVoxelRender(true);if(replace)rebuildVoxelHorizon(true);rebuildColliders()
+}
 function voxelBlockExposed(b){
   const n=[[2,0,0],[-2,0,0],[0,2,0],[0,-2,0],[0,0,2],[0,0,-2]];
   for(const [dx,dy,dz] of n)if(!state.dynamicBlocks.has(`${b.x+dx}:${b.y+dy}:${b.z+dz}`))return true;return false;
 }
 function rebuildVoxelRender(force=false){
-  if(state.world!=='voxel')return;const anchor=state.playing?state.pos:camera.position,rx=Math.floor(anchor.x/20),rz=Math.floor(anchor.z/20),key=`${rx}:${rz}:${state.dynamicBlocks.size}`;if(!force&&key===state.voxelRenderKey)return;state.voxelRenderKey=key;clearGroup(dynamicGroup);
+  if(state.world!=='voxel')return;const anchor=state.playing?state.pos:camera.position,rx=Math.floor(anchor.x/20),rz=Math.floor(anchor.z/20),key=`${rx}:${rz}`;if(!force&&key===state.voxelRenderKey)return;state.voxelRenderKey=key;clearGroup(dynamicGroup);
   const groups=new Map();for(const b of state.dynamicBlocks.values()){
     if(Math.abs(b.x-anchor.x)>VOXEL_RENDER_RADIUS||Math.abs(b.z-anchor.z)>VOXEL_RENDER_RADIUS||Math.abs(b.y-(state.playing?state.pos.y:8))>54)continue;
     if(!voxelBlockExposed(b)&&!['redstone','lamp','lever','glass'].includes(b.type))continue;
@@ -694,10 +706,22 @@ function voxelSurfaceLayers(x,z,biome=voxelBiomeAt(x,z)){const broad=.75*Math.si
 function voxelSurfaceHeight(x,z){return 1+(voxelSurfaceLayers(x,z)-1)*2}
 function voxelSurfaceBlockForBiome(b){return b==='desert'?'sand':b==='snowy_plains'||b==='mountains'?'snow':b==='badlands'?'red_sand':b==='taiga'?'podzol':'grass'}
 function rebuildVoxelHorizon(force=false){
-  if(state.world!=='voxel')return;const anchor=state.playing?state.pos:camera.position,cx=Math.floor(anchor.x/36),cz=Math.floor(anchor.z/36),key=`${cx}:${cz}:${state.dynamicBlocks.size}`;if(!force&&key===state.voxelHorizonKey)return;state.voxelHorizonKey=key;clearGroup(streamGroup);const realColumns=new Set();for(const b of state.dynamicBlocks.values())realColumns.add(`${b.x}:${b.z}`);
-  const groups=new Map(),startX=Math.floor((anchor.x-VOXEL_HORIZON_RADIUS)/VOXEL_HORIZON_STEP)*VOXEL_HORIZON_STEP,endX=anchor.x+VOXEL_HORIZON_RADIUS,startZ=Math.floor((anchor.z-VOXEL_HORIZON_RADIUS)/VOXEL_HORIZON_STEP)*VOXEL_HORIZON_STEP,endZ=anchor.z+VOXEL_HORIZON_RADIUS;
-  for(let x=startX;x<=endX;x+=VOXEL_HORIZON_STEP)for(let z=startZ;z<=endZ;z+=VOXEL_HORIZON_STEP){const dx=x-anchor.x,dz=z-anchor.z,d2=dx*dx+dz*dz;if(d2>VOXEL_HORIZON_RADIUS*VOXEL_HORIZON_RADIUS||d2<(VOXEL_RENDER_RADIUS-8)*(VOXEL_RENDER_RADIUS-8))continue;let hasReal=false;for(const ox of [0,2,-2])for(const oz of [0,2,-2])if(realColumns.has(`${Math.round((x+ox)/2)*2}:${Math.round((z+oz)/2)*2}`))hasReal=true;if(hasReal)continue;const biome=voxelBiomeAt(x,z),type=voxelSurfaceBlockForBiome(biome);if(!groups.has(type))groups.set(type,[]);groups.get(type).push([x,voxelSurfaceHeight(x,z),z])}
-  const matrix=new THREE.Matrix4();for(const [type,positions] of groups){const mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(VOXEL_HORIZON_STEP,2,VOXEL_HORIZON_STEP),voxelMaterial(type),positions.length);mesh.frustumCulled=true;for(let i=0;i<positions.length;i++){const [x,y,z]=positions[i];matrix.makeTranslation(x,y,z);mesh.setMatrixAt(i,matrix)}mesh.instanceMatrix.needsUpdate=true;streamGroup.add(mesh)}
+  if(state.world!=='voxel')return;
+  const anchor=state.playing?state.pos:camera.position,cx=Math.floor(anchor.x/48),cz=Math.floor(anchor.z/48),key=`${cx}:${cz}`;
+  if(!force&&key===state.voxelHorizonKey)return;state.voxelHorizonKey=key;state.voxelLastHorizonBuild=performance.now();clearGroup(streamGroup);
+  const realColumns=new Set();for(const b of state.dynamicBlocks.values())realColumns.add(`${b.x}:${b.z}`);
+  const groups=new Map(),push=(type,x,y,z,size)=>{const k=`${type}:${size}`;if(!groups.has(k))groups.set(k,{type,size,positions:[]});groups.get(k).positions.push([x,y,z])};
+  const sample=(step,minR,maxR)=>{
+    const minR2=minR*minR,maxR2=maxR*maxR,startX=Math.floor((anchor.x-maxR)/step)*step,endX=anchor.x+maxR,startZ=Math.floor((anchor.z-maxR)/step)*step,endZ=anchor.z+maxR;
+    for(let x=startX;x<=endX;x+=step)for(let z=startZ;z<=endZ;z+=step){const dx=x-anchor.x,dz=z-anchor.z,d2=dx*dx+dz*dz;if(d2>maxR2||d2<minR2)continue;
+      const gx=Math.round(x/2)*2,gz=Math.round(z/2)*2;if(realColumns.has(`${gx}:${gz}`))continue;
+      const biome=voxelBiomeAt(x,z),type=voxelSurfaceBlockForBiome(biome);push(type,x,voxelSurfaceHeight(x,z),z,step);
+    }
+  };
+  // A cheap close safety carpet is always present underneath missing network chunks, so a slow
+  // server response can never reveal a blue void. The distant tier is much coarser and cheap.
+  sample(VOXEL_SAFETY_STEP,0,VOXEL_SAFETY_RADIUS);sample(VOXEL_HORIZON_STEP,VOXEL_SAFETY_RADIUS-6,VOXEL_HORIZON_RADIUS);
+  const matrix=new THREE.Matrix4();for(const {type,size,positions} of groups.values()){const mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(size,2,size),voxelMaterial(type),positions.length);mesh.frustumCulled=true;mesh.castShadow=false;mesh.receiveShadow=false;for(let i=0;i<positions.length;i++){const [x,y,z]=positions[i];matrix.makeTranslation(x,y,z);mesh.setMatrixAt(i,matrix)}mesh.instanceMatrix.needsUpdate=true;streamGroup.add(mesh)}
 }
 
 function rebuildColliders(){const w=state.config.worlds[state.world];state.currentBoxes=[...w.boxes]}
@@ -710,8 +734,9 @@ function startMining(){state.miningHeld=true;updateMining(true)}
 function stopMining(){state.miningHeld=false;clearMining()}
 function updateMining(){if(state.world!=='voxel'||!state.miningHeld||state.mcHotbar===0)return;const hit=blockRay();if(!hit?.block||hit.block.type==='bedrock'){clearMining();return}if(state.miningSentKey===hit.blockKey)return;if(!state.mining||state.mining.key!==hit.blockKey){clearMining();state.mining={key:hit.blockKey,start:performance.now(),duration:miningDuration(hit.block.type),stage:-1};miningOverlay=new THREE.Mesh(new THREE.BoxGeometry(2.035,2.035,2.035),new THREE.MeshBasicMaterial({map:crackTexture(0),transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,side:THREE.DoubleSide}));miningOverlay.position.set(hit.block.x,hit.block.y,hit.block.z);scene.add(miningOverlay)}const progress=(performance.now()-state.mining.start)/(state.mining.duration*1000),stage=clamp(Math.floor(progress*10),0,9);if(stage!==state.mining.stage){state.mining.stage=stage;miningOverlay.material.map=crackTexture(stage);miningOverlay.material.needsUpdate=true;if(stage===3||stage===6||stage===9)playBlockSound('mine')}if(progress>=1){const key=state.mining.key;state.miningSentKey=key;optimisticBreak(key);wsSend({t:'block_break',key});clearMining()}}
 function voxelColumnLoaded(x,z){const gx=Math.round(x/2)*2,gz=Math.round(z/2)*2;for(let y=-23;y<=47;y+=2)if(state.dynamicBlocks.has(`${gx}:${y}:${gz}`))return true;return false}
-function requestVoxelPrefetch(x,z){const now=performance.now();if(now-state.prefetchAt<190)return;state.prefetchAt=now;wsSend({t:'voxel_prefetch',x,z})}
-function updateVoxelPrefetch(){if(state.world!=='voxel'||!state.playing)return;const tx=state.pos.x+state.vel.x*3.2,tz=state.pos.z+state.vel.z*3.2,moved=Math.hypot(state.pos.x-state.prefetchX,state.pos.z-state.prefetchZ);if(!voxelColumnLoaded(tx,tz)||moved>13)requestVoxelPrefetch(tx,tz)}
+function voxelFallbackGround(x,z){const gx=Math.round(x/2)*2,gz=Math.round(z/2)*2;return voxelSurfaceHeight(gx,gz)+1}
+function requestVoxelPrefetch(x,z){const now=performance.now();if(now-state.prefetchAt<120)return;state.prefetchAt=now;wsSend({t:'voxel_prefetch',x,z})}
+function updateVoxelPrefetch(){if(state.world!=='voxel'||!state.playing)return;const speed=Math.hypot(state.vel.x,state.vel.z),lead=4.5+Math.min(4.5,speed*.35),tx=state.pos.x+state.vel.x*lead,tz=state.pos.z+state.vel.z*lead,moved=Math.hypot(state.pos.x-state.prefetchX,state.pos.z-state.prefetchZ);if(!voxelColumnLoaded(tx,tz)||moved>9)requestVoxelPrefetch(tx,tz)}
 function placeBlock(){const hit=blockRay();if(!hit?.block)return;const b=hit.block,n=hit.face?.normal||new THREE.Vector3(0,1,0),pos=[b.x+Math.round(n.x)*2,b.y+Math.round(n.y)*2,b.z+Math.round(n.z)*2];wsSend({t:'block_place',pos,type:BLOCK_TYPES[state.blockIndex]})}
 function useBlock(){const hit=blockRay();if(hit?.blockKey)wsSend({t:'block_use',key:hit.blockKey})}
 function toggleBuildMode(){if(state.world!=='voxel'){toast('Voxel tools are only available in Voxel Frontier');return}setMinecraftHotbar(state.mcHotbar===0?1:0)}
@@ -746,15 +771,13 @@ function collidesAt(x,y,z){
 }
 function groundHeightAt(x,z,currentY){
   if(state.world==='voxel'){
-    // Use the player's footprint rather than shrinking every block. The previous +/-.2 inset created
-    // invisible cracks exactly at voxel seams, which is why walking or jumping made the player fall through.
-    const r=.58;let best=-26;
+    const r=.58,loaded=voxelColumnLoaded(x,z);let best=loaded?-26:voxelFallbackGround(x,z);
     for(const b of voxelNearbyBlocks(x,z)){const top=b.y+1;if(x+r>=b.x-1.001&&x-r<=b.x+1.001&&z+r>=b.z-1.001&&z-r<=b.z+1.001&&top<=currentY+.8&&top>best)best=top}
     return best;
   }
   let best=0;for(const b of state.currentBoxes){const top=b.y+b.h/2;if(x>b.x-b.w/2+.2&&x<b.x+b.w/2-.2&&z>b.z-b.d/2+.2&&z<b.z+b.d/2-.2&&top<=currentY+.4&&top>best)best=top}return best;
 }
-function physics(dt){if(!state.playing||!state.alive||state.chat)return;if(state.world==='voxel'&&state.dynamicBlocks.size===0)return;const cfg=state.config.classes[state.klass],fwd=new THREE.Vector3(-Math.sin(state.yaw),0,-Math.cos(state.yaw)),right=new THREE.Vector3(Math.cos(state.yaw),0,-Math.sin(state.yaw));let wish=new THREE.Vector3();if(state.keys.KeyW)wish.add(fwd);if(state.keys.KeyS)wish.sub(fwd);if(state.keys.KeyD)wish.add(right);if(state.keys.KeyA)wish.sub(right);if(wish.lengthSq())wish.normalize();if(state.world==='voxel'){const sneak=!!(state.keys.ShiftLeft||state.keys.ShiftRight),sprint=!!(state.keys.ControlLeft||state.keys.ControlRight||state.mcSprint)&&!!state.keys.KeyW&&!sneak;state.crouched=sneak;state.slide=0;const target=sneak?2.60:sprint?11.22:8.63,accel=state.grounded?38:10;if(wish.lengthSq()){state.vel.x+=wish.x*accel*dt;state.vel.z+=wish.z*accel*dt;const hs=Math.hypot(state.vel.x,state.vel.z);if(hs>target){state.vel.x*=target/hs;state.vel.z*=target/hs}}else if(state.grounded){const fr=Math.max(0,1-12*dt);state.vel.x*=fr;state.vel.z*=fr}const jump=state.keys.Space;if(jump&&!state.jumpLatch&&state.grounded&&!sneak){state.vel.y=10.15;state.grounded=false;state.jumpLatch=true;playJumpSound()}if(!jump)state.jumpLatch=false;if(!state.grounded)state.vel.y-=20.5*dt;let nx=state.pos.x+state.vel.x*dt,nz=state.pos.z+state.vel.z*dt;if(!voxelColumnLoaded(nx,nz)){requestVoxelPrefetch(nx+state.vel.x*1.5,nz+state.vel.z*1.5);nx=state.pos.x;nz=state.pos.z}if(sneak&&state.grounded){if(groundHeightAt(nx,state.pos.z,state.pos.y+.25)<state.pos.y-1)nx=state.pos.x;if(groundHeightAt(state.pos.x,nz,state.pos.y+.25)<state.pos.y-1)nz=state.pos.z}if(!collidesAt(nx,state.pos.y,state.pos.z))state.pos.x=nx;else state.vel.x=0;if(!collidesAt(state.pos.x,state.pos.y,nz))state.pos.z=nz;else state.vel.z=0;const wasGrounded=state.grounded,prevY=state.pos.y;state.pos.y+=state.vel.y*dt;const gh=groundHeightAt(state.pos.x,state.pos.z,prevY+.35);if(state.pos.y<=gh&&state.vel.y<=0){state.pos.y=gh;state.vel.y=0;state.grounded=true;if(!wasGrounded)playLandSound()}else state.grounded=false;if(state.grounded&&wish.lengthSq()&&performance.now()-state.stepAt>(sprint?250:sneak?520:360)){state.stepAt=performance.now();playStepSound()}}else{const speedMult=cfg.speed,base=7.35*speedMult,horizontal=Math.hypot(state.vel.x,state.vel.z),shift=state.keys.ShiftLeft||state.keys.ShiftRight;if(state.grounded&&shift&&horizontal>4.2&&state.slide<=0){state.slide=.43;state.crouched=true;const boost=Math.min(15.8*speedMult,Math.max(base*1.22,horizontal*1.09));if(horizontal>0){state.vel.x=state.vel.x/horizontal*boost;state.vel.z=state.vel.z/horizontal*boost}}if(state.slide>0){state.slide-=dt;state.crouched=true;if(wish.lengthSq()){state.vel.x+=wish.x*4*dt;state.vel.z+=wish.z*4*dt}const drag=Math.pow(.72,dt);state.vel.x*=drag;state.vel.z*=drag}else state.crouched=shift&&state.grounded;const accel=state.grounded?34:12,target=base;if(state.slide<=0){if(wish.lengthSq()){state.vel.x+=wish.x*accel*dt;state.vel.z+=wish.z*accel*dt;const hs=Math.hypot(state.vel.x,state.vel.z),cap=state.grounded?target*1.25:Math.max(target*1.2,state.speedBoost*target);if(hs>cap){state.vel.x*=cap/hs;state.vel.z*=cap/hs}}else if(state.grounded){const fr=Math.max(0,1-9*dt);state.vel.x*=fr;state.vel.z*=fr}}const jump=state.keys.Space;if(jump&&!state.jumpLatch&&state.grounded){const hs=Math.hypot(state.vel.x,state.vel.z);state.vel.y=9.4;state.grounded=false;state.jumpLatch=true;playJumpSound();if(state.slide>0||state.landGrace>0){const n=Math.max(hs,base);state.speedBoost=clamp(n/base*1.035,1,2.15);if(hs>0){state.vel.x*=1.035;state.vel.z*=1.035}}state.slide=0}if(!jump)state.jumpLatch=false;if(!state.grounded)state.vel.y-=20.5*dt;state.landGrace=Math.max(0,state.landGrace-dt);const nx=state.pos.x+state.vel.x*dt,nz=state.pos.z+state.vel.z*dt;const bx=collidesAt(nx,state.pos.y,state.pos.z);if(!bx)state.pos.x=nx;else{if(cfg.wall_jump&&jump&&!state.grounded&&!state.jumpLatch){state.vel.y=8.8;state.vel.x*=-.42;state.jumpLatch=true}state.vel.x=0}const bz=collidesAt(state.pos.x,state.pos.y,nz);if(!bz)state.pos.z=nz;else{if(cfg.wall_jump&&jump&&!state.grounded&&!state.jumpLatch){state.vel.y=8.8;state.vel.z*=-.42;state.jumpLatch=true}state.vel.z=0}const wasGrounded=state.grounded,prevY=state.pos.y;state.pos.y+=state.vel.y*dt;const gh=groundHeightAt(state.pos.x,state.pos.z,prevY+.3);if(state.pos.y<=gh&&state.vel.y<=0){if(!state.grounded){state.landGrace=.11;const hs=Math.hypot(state.vel.x,state.vel.z);state.speedBoost=clamp(hs/base,1,2.2)}state.pos.y=gh;state.vel.y=0;state.grounded=true;if(!wasGrounded)playLandSound()}else state.grounded=false}if(state.pos.y<(state.world==='voxel'?-8.25:-8)){const reset=state.config.worlds[state.world].spawns[0]||[0,0,0];state.pos.set(reset[0],reset[1],reset[2]);state.vel.set(0,0,0)}$('#speed').textContent=Math.round(Math.hypot(state.vel.x,state.vel.z)*10)}
+function physics(dt){if(!state.playing||!state.alive||state.chat)return;if(state.world==='voxel'&&state.dynamicBlocks.size===0)return;const cfg=state.config.classes[state.klass],fwd=new THREE.Vector3(-Math.sin(state.yaw),0,-Math.cos(state.yaw)),right=new THREE.Vector3(Math.cos(state.yaw),0,-Math.sin(state.yaw));let wish=new THREE.Vector3();if(state.keys.KeyW)wish.add(fwd);if(state.keys.KeyS)wish.sub(fwd);if(state.keys.KeyD)wish.add(right);if(state.keys.KeyA)wish.sub(right);if(wish.lengthSq())wish.normalize();if(state.world==='voxel'){const sneak=!!(state.keys.ShiftLeft||state.keys.ShiftRight),sprint=!!(state.keys.ControlLeft||state.keys.ControlRight||state.mcSprint)&&!!state.keys.KeyW&&!sneak;state.crouched=sneak;state.slide=0;const target=sneak?2.60:sprint?11.22:8.63,accel=state.grounded?38:10;if(wish.lengthSq()){state.vel.x+=wish.x*accel*dt;state.vel.z+=wish.z*accel*dt;const hs=Math.hypot(state.vel.x,state.vel.z);if(hs>target){state.vel.x*=target/hs;state.vel.z*=target/hs}}else if(state.grounded){const fr=Math.max(0,1-12*dt);state.vel.x*=fr;state.vel.z*=fr}const jump=state.keys.Space;if(jump&&!state.jumpLatch&&state.grounded&&!sneak){state.vel.y=10.15;state.grounded=false;state.jumpLatch=true;playJumpSound()}if(!jump)state.jumpLatch=false;if(!state.grounded)state.vel.y-=20.5*dt;let nx=state.pos.x+state.vel.x*dt,nz=state.pos.z+state.vel.z*dt;if(!voxelColumnLoaded(nx,nz))requestVoxelPrefetch(nx+state.vel.x*4.5,nz+state.vel.z*4.5);if(sneak&&state.grounded){if(groundHeightAt(nx,state.pos.z,state.pos.y+.25)<state.pos.y-1)nx=state.pos.x;if(groundHeightAt(state.pos.x,nz,state.pos.y+.25)<state.pos.y-1)nz=state.pos.z}if(!collidesAt(nx,state.pos.y,state.pos.z))state.pos.x=nx;else state.vel.x=0;if(!collidesAt(state.pos.x,state.pos.y,nz))state.pos.z=nz;else state.vel.z=0;const wasGrounded=state.grounded,prevY=state.pos.y;state.pos.y+=state.vel.y*dt;const gh=groundHeightAt(state.pos.x,state.pos.z,prevY+.35);if(state.pos.y<=gh&&state.vel.y<=0){state.pos.y=gh;state.vel.y=0;state.grounded=true;if(!wasGrounded)playLandSound()}else state.grounded=false;if(!voxelColumnLoaded(state.pos.x,state.pos.z)){const safe=voxelFallbackGround(state.pos.x,state.pos.z);if(state.pos.y<safe-1.25){state.pos.y=safe;state.vel.y=0;state.grounded=true}}if(state.grounded&&wish.lengthSq()&&performance.now()-state.stepAt>(sprint?250:sneak?520:360)){state.stepAt=performance.now();playStepSound()}}else{const speedMult=cfg.speed,base=7.35*speedMult,horizontal=Math.hypot(state.vel.x,state.vel.z),shift=state.keys.ShiftLeft||state.keys.ShiftRight;if(state.grounded&&shift&&horizontal>4.2&&state.slide<=0){state.slide=.43;state.crouched=true;const boost=Math.min(15.8*speedMult,Math.max(base*1.22,horizontal*1.09));if(horizontal>0){state.vel.x=state.vel.x/horizontal*boost;state.vel.z=state.vel.z/horizontal*boost}}if(state.slide>0){state.slide-=dt;state.crouched=true;if(wish.lengthSq()){state.vel.x+=wish.x*4*dt;state.vel.z+=wish.z*4*dt}const drag=Math.pow(.72,dt);state.vel.x*=drag;state.vel.z*=drag}else state.crouched=shift&&state.grounded;const accel=state.grounded?34:12,target=base;if(state.slide<=0){if(wish.lengthSq()){state.vel.x+=wish.x*accel*dt;state.vel.z+=wish.z*accel*dt;const hs=Math.hypot(state.vel.x,state.vel.z),cap=state.grounded?target*1.25:Math.max(target*1.2,state.speedBoost*target);if(hs>cap){state.vel.x*=cap/hs;state.vel.z*=cap/hs}}else if(state.grounded){const fr=Math.max(0,1-9*dt);state.vel.x*=fr;state.vel.z*=fr}}const jump=state.keys.Space;if(jump&&!state.jumpLatch&&state.grounded){const hs=Math.hypot(state.vel.x,state.vel.z);state.vel.y=9.4;state.grounded=false;state.jumpLatch=true;playJumpSound();if(state.slide>0||state.landGrace>0){const n=Math.max(hs,base);state.speedBoost=clamp(n/base*1.035,1,2.15);if(hs>0){state.vel.x*=1.035;state.vel.z*=1.035}}state.slide=0}if(!jump)state.jumpLatch=false;if(!state.grounded)state.vel.y-=20.5*dt;state.landGrace=Math.max(0,state.landGrace-dt);const nx=state.pos.x+state.vel.x*dt,nz=state.pos.z+state.vel.z*dt;const bx=collidesAt(nx,state.pos.y,state.pos.z);if(!bx)state.pos.x=nx;else{if(cfg.wall_jump&&jump&&!state.grounded&&!state.jumpLatch){state.vel.y=8.8;state.vel.x*=-.42;state.jumpLatch=true}state.vel.x=0}const bz=collidesAt(state.pos.x,state.pos.y,nz);if(!bz)state.pos.z=nz;else{if(cfg.wall_jump&&jump&&!state.grounded&&!state.jumpLatch){state.vel.y=8.8;state.vel.z*=-.42;state.jumpLatch=true}state.vel.z=0}const wasGrounded=state.grounded,prevY=state.pos.y;state.pos.y+=state.vel.y*dt;const gh=groundHeightAt(state.pos.x,state.pos.z,prevY+.3);if(state.pos.y<=gh&&state.vel.y<=0){if(!state.grounded){state.landGrace=.11;const hs=Math.hypot(state.vel.x,state.vel.z);state.speedBoost=clamp(hs/base,1,2.2)}state.pos.y=gh;state.vel.y=0;state.grounded=true;if(!wasGrounded)playLandSound()}else state.grounded=false}if(state.pos.y<(state.world==='voxel'?-8.25:-8)){const reset=state.config.worlds[state.world].spawns[0]||[0,0,0];state.pos.set(reset[0],reset[1],reset[2]);state.vel.set(0,0,0)}$('#speed').textContent=Math.round(Math.hypot(state.vel.x,state.vel.z)*10)}
 
 function shoot(){if(!state.playing||!state.alive||state.chat||state.reloading||(state.world==='voxel'&&state.mcHotbar!==0))return;const cfg=weaponCfg(),now=performance.now(),delay=60000/cfg.rpm;if(now-state.lastShot<delay)return;if(state.ammo<=0){reload();return}state.lastShot=now;state.ammo--;updateAmmo();muzzle.intensity=cfg.nonlethal?6:10;setTimeout(()=>muzzle.intensity=0,35);weaponGroup.rotation.x=cfg.nonlethal?-.015:-.045;weaponGroup.position.z=.045;const spread=cfg.spread*(state.ads?.42:1),dir=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);dir.x+=(Math.random()-.5)*spread;dir.y+=(Math.random()-.5)*spread;dir.z+=(Math.random()-.5)*spread;dir.normalize();const o=camera.getWorldPosition(new THREE.Vector3());wsSend({t:'fire',o:[o.x,o.y,o.z],d:[dir.x,dir.y,dir.z]});state.pitch+=(state.weapon==='Sniper Rifle'?.035:state.weapon==='Machine Gun'?.014:state.weapon==='Milan Gun'?.003:.009)*(state.ads?.65:1);playShot(state.weapon);if(state.ammo===0)setTimeout(reload,130)}
 function reload(){if(state.reloading||(state.world==='voxel'&&state.mcHotbar!==0))return;const cfg=weaponCfg();if(state.ammo>=cfg.mag)return;state.reloading=true;$('#mag').textContent='R';playReloadSound(false);setTimeout(()=>{state.ammo=cfg.mag;state.reloading=false;updateAmmo();playReloadSound(true)},cfg.reload*1000)}
@@ -772,16 +795,37 @@ function playBlockSound(kind){noiseBurst(kind==='mine'?.055:.035,kind==='mine'?.
 function playSwordSound(){noiseBurst(.05,.025,2600);tone(330,.06,'sawtooth',.018,145)}
 function playDropSound(){tone(220,.06,'triangle',.018,120)}
 function softTone(freq,dur=.9,gain=.010,type='sine'){const ac=audioCtx();if(!ac)return;const o=ac.createOscillator(),g=ac.createGain(),lp=ac.createBiquadFilter();o.type=type;o.frequency.value=freq;lp.type='lowpass';lp.frequency.value=1600;g.gain.setValueAtTime(.0001,ac.currentTime);g.gain.exponentialRampToValueAtTime(gain,ac.currentTime+.08);g.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+dur);o.connect(lp).connect(g).connect(ac.destination);o.start();o.stop(ac.currentTime+dur+.03)}
-function clanPluck(freq,dur=.42,gain=.012){const ac=audioCtx();if(!ac)return;const o=ac.createOscillator(),g=ac.createGain(),lp=ac.createBiquadFilter();o.type='triangle';o.frequency.value=freq;lp.type='lowpass';lp.frequency.value=2200;g.gain.setValueAtTime(gain,ac.currentTime);g.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+dur);o.connect(lp).connect(g).connect(ac.destination);o.start();o.stop(ac.currentTime+dur+.02)}
-function clanWoodwind(freq,dur=.9,gain=.0055){const ac=audioCtx();if(!ac)return;for(const [type,ratio,g] of [['sine',1,1],['triangle',2,.18]]){const o=ac.createOscillator(),v=ac.createGain();o.type=type;o.frequency.value=freq*ratio;v.gain.setValueAtTime(.0001,ac.currentTime);v.gain.exponentialRampToValueAtTime(gain*g,ac.currentTime+.12);v.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+dur);o.connect(v).connect(ac.destination);o.start();o.stop(ac.currentTime+dur+.02)}}
-function clanDrum(){noiseBurst(.10,.010,380);tone(82,.12,'sine',.012,46)}
-function updateWorldMusic(){if(!state.playing||!state.musicOn||!['voxel','clan'].includes(state.world))return;const now=performance.now();if(now<state.musicNextAt)return;state.musicStep++;if(state.world==='voxel'){const notes=[261.63,329.63,392,493.88,523.25,659.25],n=notes[(state.musicStep*3+Math.floor(now/7000))%notes.length];softTone(n,2.8,.006,'sine');if(state.musicStep%3===0)softTone(n/2,3.6,.0035,'triangle');state.musicNextAt=now+2700+((state.musicStep*911)%2300)}else{
-  // Original fantasy-village arrangement: plucked strings, airy woodwind and soft frame-drum pulse.
-  // It intentionally does not reproduce Supercell's copyrighted melody or recording.
-  const step=state.musicStep%16,roots=[174.61,155.56,130.81,146.83],root=roots[Math.floor(step/4)%4],degrees=[1,1.25,1.5,2,1.5,1.25,1.125,1.5,1,1.2,1.5,1.8,1.125,1.4,1.67,1.4],note=root*degrees[step];
-  clanPluck(note,.38,.0105);if(step%2===1)clanPluck(note*2,.22,.0045);if(step%4===0){clanDrum();softTone(root/2,1.25,.0038,'triangle')}if(step===2||step===6||step===10||step===14)clanWoodwind(note*.5,1.05,.0052);if(step===7||step===15)clanPluck(root*3,.55,.006);
-  state.musicNextAt=now+326;
-}}
+function clanMusicDestination(){
+  const ac=audioCtx();if(!ac)return null;if(clanMusicFx&&clanMusicFx.ac===ac)return clanMusicFx.input;
+  const input=ac.createGain(),dry=ac.createGain(),wet=ac.createGain(),conv=ac.createConvolver();dry.gain.value=.82;wet.gain.value=.22;
+  const seconds=1.55,len=Math.max(1,Math.floor(ac.sampleRate*seconds)),buf=ac.createBuffer(2,len,ac.sampleRate);
+  for(let ch=0;ch<2;ch++){const d=buf.getChannelData(ch);for(let i=0;i<len;i++){const decay=Math.pow(1-i/len,2.7);d[i]=(Math.random()*2-1)*decay*.42}}
+  conv.buffer=buf;input.connect(dry).connect(ac.destination);input.connect(conv).connect(wet).connect(ac.destination);clanMusicFx={ac,input};return input;
+}
+function clanHarp(freq,dur=.75,gain=.011){
+  const ac=audioCtx();if(!ac)return;const now=ac.currentTime,master=ac.createGain(),lp=ac.createBiquadFilter(),os=[];lp.type='lowpass';lp.frequency.value=2800;master.gain.setValueAtTime(gain,now);master.gain.exponentialRampToValueAtTime(.0001,now+dur);
+  for(const [type,ratio,amp] of [['triangle',1,1],['sine',2,.22],['sine',3,.07]]){const o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.value=freq*ratio;g.gain.value=amp;o.connect(g).connect(lp);os.push(o)}const dest=clanMusicDestination()||ac.destination;lp.connect(master).connect(dest);for(const o of os){o.start(now);o.stop(now+dur+.03)}
+}
+function clanPizz(freq,dur=.32,gain=.006){const ac=audioCtx();if(!ac)return;const o=ac.createOscillator(),g=ac.createGain(),lp=ac.createBiquadFilter();o.type='triangle';o.frequency.value=freq;lp.type='lowpass';lp.frequency.value=900;g.gain.setValueAtTime(gain,ac.currentTime);g.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+dur);const dest=clanMusicDestination()||ac.destination;o.connect(lp).connect(g).connect(dest);o.start();o.stop(ac.currentTime+dur+.02)}
+function clanFlute(freq,dur=1.6,gain=.0045){const ac=audioCtx();if(!ac)return;const now=ac.currentTime,o=ac.createOscillator(),o2=ac.createOscillator(),g=ac.createGain(),v=ac.createGain();o.type='sine';o2.type='sine';o.frequency.value=freq;o2.frequency.value=freq*2;v.gain.value=.08;g.gain.setValueAtTime(.0001,now);g.gain.linearRampToValueAtTime(gain,now+.22);g.gain.linearRampToValueAtTime(gain*.72,now+dur*.72);g.gain.exponentialRampToValueAtTime(.0001,now+dur);o.connect(g);o2.connect(v).connect(g);const dest=clanMusicDestination()||ac.destination;g.connect(dest);o.start();o2.start();o.stop(now+dur+.03);o2.stop(now+dur+.03)}
+function clanBell(freq,dur=1.1,gain=.0035){const ac=audioCtx();if(!ac)return;const now=ac.currentTime,g=ac.createGain();g.gain.setValueAtTime(gain,now);g.gain.exponentialRampToValueAtTime(.0001,now+dur);for(const [ratio,amp] of [[1,1],[2.01,.32],[3.98,.12]]){const o=ac.createOscillator(),v=ac.createGain();o.type='sine';o.frequency.value=freq*ratio;v.gain.value=amp;o.connect(v).connect(g);o.start(now);o.stop(now+dur+.02)}const dest=clanMusicDestination()||ac.destination;g.connect(dest)}
+function clanDrum(soft=false){noiseBurst(soft?.055:.085,soft?.0045:.008,soft?650:430);if(!soft)tone(76,.10,'sine',.007,48)}
+function updateWorldMusic(){if(!state.playing||!state.musicOn||!['voxel','clan'].includes(state.world))return;const now=performance.now();if(now<state.musicNextAt)return;state.musicStep++;
+  if(state.world==='voxel'){
+    const notes=[261.63,329.63,392,493.88,523.25,659.25],n=notes[(state.musicStep*3+Math.floor(now/7000))%notes.length];softTone(n,2.8,.006,'sine');if(state.musicStep%3===0)softTone(n/2,3.6,.0035,'triangle');state.musicNextAt=now+2700+((state.musicStep*911)%2300);return;
+  }
+  // Original home-village-style score: relaxed 6/8 pulse, harp-led arpeggios, quiet pizzicato,
+  // flute replies and sparse bells/drums. It evokes the acoustic/fantasy palette without
+  // reproducing Supercell's copyrighted melody or recording.
+  const step=state.musicStep%24,beat=510,roots=[146.83,174.61,130.81,164.81],root=roots[Math.floor(step/6)%4];
+  const arp=[1,1.5,2,1.25,1.5,2.5],degree=arp[step%6];clanHarp(root*degree,.72,.0085);
+  if(step%3===0)clanPizz(root/2,.34,.0052);
+  if(step===3||step===9||step===15||step===21)clanFlute(root*2*(step%12===3?1.125:1.25),1.55,.0038);
+  if(step===5||step===17)clanBell(root*3,1.2,.0027);
+  if(step%6===0)clanDrum(false);else if(step%3===0)clanDrum(true);
+  // A brief breath at the end of each phrase keeps the music calm rather than arcade-fast.
+  state.musicNextAt=now+beat+(step===23?900:0);
+}
 function digitSprite(digit){const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d');x.font='900 100px Arial';x.textAlign='center';x.textBaseline='middle';x.lineWidth=10;x.strokeStyle='#10222b';x.strokeText(digit,64,67);x.fillStyle=digit==='6'?'#7ee8ff':'#ffd667';x.fillText(digit,64,67);const tex=new THREE.CanvasTexture(c),sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:true}));sp.scale.set(.26,.26,.26);return sp}
 function spawnMilanProjectile(m){const sp=digitSprite(m.digit==='7'?'7':'6'),o=m.o||[0,0,0],d=m.d||[0,0,-1];sp.position.set(o[0],o[1],o[2]);scene.add(sp);state.milanProjectiles.push({obj:sp,vel:new THREE.Vector3(d[0],d[1],d[2]).multiplyScalar(24),life:1.8,spin:(Math.random()-.5)*4})}
 function updateMilanProjectiles(dt){for(let i=state.milanProjectiles.length-1;i>=0;i--){const p=state.milanProjectiles[i];p.life-=dt;p.obj.position.addScaledVector(p.vel,dt);p.obj.material.rotation+=p.spin*dt;if(p.life<=0){scene.remove(p.obj);p.obj.material.map?.dispose();p.obj.material.dispose();state.milanProjectiles.splice(i,1)}}}

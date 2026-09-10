@@ -21,7 +21,7 @@ STATIC = ROOT / "static"
 
 logger = logging.getLogger("blockfront")
 
-app = FastAPI(title="Blockfront Worlds", version="2.6.0")
+app = FastAPI(title="Blockfront Worlds", version="2.7.0")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
@@ -260,7 +260,7 @@ BLOCK_COLORS = {
 VOXEL_GRID = 2
 VOXEL_CHUNK_CELLS = 8
 VOXEL_CHUNK_RADIUS = 1
-VOXEL_STREAM_RADIUS = 54
+VOXEL_STREAM_RADIUS = 44
 VOXEL_MIN_Y = -23
 VOXEL_MAX_Y = 47
 VOXEL_TERRAIN_TYPES = {"grass", "dirt", "stone", "sand", "sandstone", "snow", "red_sand", "terracotta", "podzol", "bedrock", "deepslate", "coal_ore", "iron_ore"}
@@ -731,22 +731,47 @@ class Room:
         return False
 
     def blocks_near(self, x: float, z: float, radius: float = VOXEL_STREAM_RADIUS):
-        # Send a complete collision/mining core near the player, but only exposed
-        # surface blocks farther out. This keeps Minecraft-style horizons visible
-        # without shipping thousands of hidden underground cubes every update.
+        """Return the useful voxel window around ``x,z`` without scanning the whole world.
+
+        The old implementation iterated over every block ever generated in the room. That
+        becomes progressively slower in an infinite world. This version performs fixed-size
+        dictionary lookups on the voxel grid, so the amount of work depends on the stream
+        radius rather than on how far players have explored.
+        """
         r2 = radius * radius
-        core2 = 10 * 10
+        core2 = 12 * 12
+        center_x = grid_round(x, VOXEL_GRID)
+        center_z = grid_round(z, VOXEL_GRID)
+        cells = int(math.ceil(radius / VOXEL_GRID))
         out = []
-        for b in self.blocks.values():
-            d2 = (b.x - x) ** 2 + (b.z - z) ** 2
-            if d2 > r2:
+        for ix in range(-cells, cells + 1):
+            bx = center_x + ix * VOXEL_GRID
+            dx2 = (bx - x) ** 2
+            if dx2 > r2:
                 continue
-            surface_y = 1 + (voxel_surface_layers(b.x, b.z) - 1) * 2
-            if d2 <= core2 or b.y >= surface_y - 4 or b.type in {"redstone", "lamp", "lever", "glass"}:
-                out.append(b.public())
+            for iz in range(-cells, cells + 1):
+                bz = center_z + iz * VOXEL_GRID
+                d2 = dx2 + (bz - z) ** 2
+                if d2 > r2:
+                    continue
+                surface_y = 1 + (voxel_surface_layers(bx, bz) - 1) * 2
+                if d2 <= core2:
+                    y0, y1 = VOXEL_MIN_Y, VOXEL_MAX_Y
+                else:
+                    # Surface, tree canopy and village roofs are all within this band.
+                    y0 = max(VOXEL_MIN_Y, surface_y - 5)
+                    y1 = min(VOXEL_MAX_Y, surface_y + 19)
+                if (y0 - 1) % 2:
+                    y0 += 1
+                for by in range(y0, y1 + 1, 2):
+                    b = self.blocks.get(f"{bx}:{by}:{bz}")
+                    if b is not None:
+                        out.append(b.public())
         return out
 
-    async def emit_blocks(self, only: Optional[str] = None):
+    async def emit_blocks(self, only: Optional[str] = None, center: Optional[Tuple[float, float]] = None,
+                          radius: float = VOXEL_STREAM_RADIUS, message_type: str = "blocks_patch"):
+        """Send a mergeable voxel patch instead of replacing the client's whole cache."""
         dead = []
         for pid, ws in list(self.sockets.items()):
             if only is not None and pid != only:
@@ -754,8 +779,14 @@ class Room:
             player = self.players.get(pid)
             if not player:
                 continue
+            cx, cz = center if center is not None else (player.x, player.z)
             try:
-                await ws.send_json({"t": "blocks", "blocks": self.blocks_near(player.x, player.z)})
+                await ws.send_json({
+                    "t": message_type,
+                    "center": [cx, cz],
+                    "radius": radius,
+                    "blocks": self.blocks_near(cx, cz, radius),
+                })
             except Exception:
                 dead.append(pid)
         for pid in dead:
@@ -920,7 +951,7 @@ async def terms():
 async def health():
     return {
         "ok": True,
-        "version": "2.6.0",
+        "version": "2.7.0",
         "rooms": len(rooms),
         "players": sum(len(r.players) for r in rooms.values()),
     }
@@ -933,7 +964,7 @@ async def config():
 
 @app.get("/api/site-config")
 async def site_config():
-    return JSONResponse({"ads": ad_config(), "version": "2.6.0", "brand": "Blockfront Worlds"})
+    return JSONResponse({"ads": ad_config(), "version": "2.7.0", "brand": "Blockfront Worlds"})
 
 
 @app.get("/api/rooms")
@@ -1010,7 +1041,7 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                     else:
                         p.y = clamp(ny, 0, 24)
                 if generated:
-                    await room.emit_blocks(only=pid)
+                    await room.emit_blocks(only=pid, center=(p.x, p.z), radius=36)
                 p.yaw = float(msg.get("yaw", p.yaw))
                 p.pitch = clamp(float(msg.get("pitch", p.pitch)), -1.55, 1.55)
                 p.vx = clamp(float(msg.get("vx", 0)), -30, 30)
@@ -1023,9 +1054,9 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                     tz = float(msg.get("z", p.z))
                 except (TypeError, ValueError):
                     continue
-                if math.hypot(tx - p.x, tz - p.z) <= 60:
+                if math.hypot(tx - p.x, tz - p.z) <= 90:
                     room.ensure_voxel_area(tx, tz, VOXEL_CHUNK_RADIUS)
-                    await room.emit_blocks(only=pid)
+                    await room.emit_blocks(only=pid, center=(tx, tz), radius=36)
 
             elif t == "class":
                 k = msg.get("klass")
@@ -1074,10 +1105,10 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                 removed = room.blocks.pop(key, None)
                 room.recompute_power()
                 p.score += 5
-                if removed and removed.type in {"redstone", "lamp", "lever"}:
-                    await room.emit_blocks()
-                else:
+                if removed:
                     await room.emit({"t": "block_remove", "key": key})
+                    if removed.type in {"redstone", "lamp", "lever"}:
+                        await room.emit_blocks(radius=28)
 
             elif t == "block_place" and p.alive and room.world == "voxel":
                 now = time.time()
@@ -1105,10 +1136,9 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                     continue
                 placed = room.add_block(x, y, z, typ, p.id)
                 room.recompute_power()
+                await room.emit({"t": "block_add", "block": placed.public()})
                 if typ in {"redstone", "lamp", "lever"}:
-                    await room.emit_blocks()
-                else:
-                    await room.emit({"t": "block_add", "block": placed.public()})
+                    await room.emit_blocks(radius=28)
 
             elif t == "block_use" and p.alive and room.world == "voxel":
                 key = str(msg.get("key", ""))
@@ -1116,7 +1146,7 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                 if b and b.type == "lever" and math.dist((p.x, p.y + 3.0, p.z), (b.x, b.y, b.z)) <= 7.0:
                     b.powered = not b.powered
                     room.recompute_power()
-                    await room.emit_blocks()
+                    await room.emit_blocks(radius=28)
 
             elif t == "fire" and p.alive:
                 cfg = WEAPONS.get(p.weapon, WEAPONS[DEFAULT_WEAPON])

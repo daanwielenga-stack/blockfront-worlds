@@ -8,6 +8,7 @@ from app import (
     WEAPONS,
     WORLD_ORDER,
     WORLDS,
+    VOXEL_STREAM_RADIUS,
     Player,
     Room,
     app,
@@ -27,7 +28,7 @@ def test_health():
     assert r.status_code == 200
     body = r.json()
     assert body['ok'] is True
-    assert body['version'] == '2.6.0'
+    assert body['version'] == '2.7.0'
 
 
 def test_config_contains_five_worlds():
@@ -198,3 +199,24 @@ def test_voxel_depth_and_spawn_clearing():
     assert any(b.y <= -20 for b in room.blocks.values())
     assert any(b.type in {'deepslate','coal_ore','iron_ore'} for b in room.blocks.values())
     assert voxel_biome_at(0, 0) == 'plains'
+
+
+def test_voxel_stream_radius_is_bounded_for_fast_patches():
+    assert VOXEL_STREAM_RADIUS <= 44
+
+
+def test_voxel_prefetch_returns_mergeable_patch():
+    rooms.clear()
+    with client.websocket_connect('/ws/PATCH?mode=FFA&world=voxel&name=PatchTester&klass=Triggerman') as ws:
+        welcome = ws.receive_json()
+        assert welcome['t'] == 'welcome'
+        ws.send_json({'t': 'voxel_prefetch', 'x': welcome['player']['x'] + 20, 'z': welcome['player']['z'] + 8})
+        found = None
+        for _ in range(12):
+            msg = ws.receive_json()
+            if msg.get('t') == 'blocks_patch':
+                found = msg
+                break
+        assert found is not None
+        assert found['radius'] <= 36
+        assert found['blocks']
