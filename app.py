@@ -21,7 +21,7 @@ STATIC = ROOT / "static"
 
 logger = logging.getLogger("blockfront")
 
-app = FastAPI(title="Blockfront Worlds", version="2.5.0")
+app = FastAPI(title="Blockfront Worlds", version="2.6.0")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
@@ -166,77 +166,82 @@ def battle_world():
     }
 
 
+CLAN_WALL_COUNTS = {
+    1: 0, 2: 25, 3: 50, 4: 75, 5: 100, 6: 125, 7: 175, 8: 225, 9: 250,
+    10: 275, 11: 300, 12: 300, 13: 300, 14: 325, 15: 325, 16: 325, 17: 325,
+}
+
+# Copy counts of permanent Home Village defensive structures by Town Hall.
+# Counts intentionally reflect merged defenses at TH16/TH17 (for example,
+# some Cannons/Archer Towers are consumed by Ricochet/Multi-Archer merges).
+CLAN_DEFENSE_COUNTS = {
+    1:  {"cannon": 1},
+    2:  {"cannon": 2, "archer": 1},
+    3:  {"cannon": 2, "archer": 1, "mortar": 1},
+    4:  {"cannon": 2, "archer": 2, "mortar": 1, "air": 1},
+    5:  {"cannon": 3, "archer": 3, "mortar": 1, "air": 1, "wizard": 1},
+    6:  {"cannon": 3, "archer": 3, "mortar": 2, "air": 2, "wizard": 2, "sweeper": 1},
+    7:  {"cannon": 5, "archer": 4, "mortar": 3, "air": 3, "wizard": 2, "sweeper": 1, "tesla": 2},
+    8:  {"cannon": 5, "archer": 5, "mortar": 4, "air": 3, "wizard": 3, "sweeper": 1, "tesla": 3, "bomb": 1},
+    9:  {"cannon": 5, "archer": 6, "mortar": 4, "air": 4, "wizard": 4, "sweeper": 2, "tesla": 4, "bomb": 1, "xbow": 2},
+    10: {"cannon": 6, "archer": 7, "mortar": 4, "air": 4, "wizard": 4, "sweeper": 2, "tesla": 4, "bomb": 2, "xbow": 3, "inferno": 2},
+    11: {"cannon": 7, "archer": 8, "mortar": 4, "air": 4, "wizard": 5, "sweeper": 2, "tesla": 4, "bomb": 2, "xbow": 4, "inferno": 2, "eagle": 1},
+    12: {"cannon": 7, "archer": 8, "mortar": 4, "air": 4, "wizard": 5, "sweeper": 2, "tesla": 5, "bomb": 2, "xbow": 4, "inferno": 3, "eagle": 1},
+    13: {"cannon": 7, "archer": 8, "mortar": 4, "air": 4, "wizard": 5, "sweeper": 2, "tesla": 5, "bomb": 2, "xbow": 4, "inferno": 3, "eagle": 1, "scatter": 2},
+    14: {"cannon": 7, "archer": 8, "mortar": 4, "air": 4, "wizard": 5, "sweeper": 2, "tesla": 5, "bomb": 2, "xbow": 4, "inferno": 3, "eagle": 1, "scatter": 2, "builder": 5},
+    15: {"cannon": 7, "archer": 8, "mortar": 4, "air": 4, "wizard": 5, "sweeper": 2, "tesla": 5, "bomb": 2, "xbow": 4, "inferno": 3, "eagle": 1, "scatter": 2, "builder": 5, "spell": 2, "monolith": 1},
+    16: {"cannon": 3, "archer": 4, "mortar": 4, "air": 4, "wizard": 5, "sweeper": 2, "tesla": 5, "bomb": 2, "xbow": 4, "inferno": 3, "eagle": 1, "scatter": 2, "builder": 5, "spell": 2, "monolith": 1, "multiarcher": 2, "ricochet": 2},
+    17: {"archer": 2, "mortar": 4, "air": 4, "wizard": 5, "sweeper": 2, "tesla": 5, "bomb": 2, "xbow": 4, "inferno": 3, "scatter": 2, "builder": 5, "spell": 2, "monolith": 1, "multiarcher": 3, "ricochet": 3, "multigear": 1, "firespitter": 2, "infernoartillery": 1},
+}
+
+
 def clan_world():
-    # Seventeen separate villages scattered across the Clash world. TH1 is the
-    # spawn village; the others are deliberately distributed in two dimensions
-    # instead of being arranged on a straight progression line.
+    # Compact scattered cluster: each village is still distinct, but neighbouring
+    # Town Halls are now close enough to feel like one continuous Clash landscape.
     village_layout = [
         {"th": 1,  "x": 0,    "z": 0},
-        {"th": 2,  "x": -58,  "z": -38},
-        {"th": 3,  "x": 62,   "z": -42},
-        {"th": 4,  "x": -62,  "z": 44},
-        {"th": 5,  "x": 66,   "z": 46},
-        {"th": 6,  "x": -118, "z": -2},
-        {"th": 7,  "x": 124,  "z": 6},
-        {"th": 8,  "x": -18,  "z": -92},
-        {"th": 9,  "x": 24,   "z": 98},
-        {"th": 10, "x": -118, "z": 82},
-        {"th": 11, "x": 122,  "z": -88},
-        {"th": 12, "x": -176, "z": 34},
-        {"th": 13, "x": 180,  "z": -26},
-        {"th": 14, "x": -72,  "z": 142},
-        {"th": 15, "x": 80,   "z": 150},
-        {"th": 16, "x": -170, "z": -88},
-        {"th": 17, "x": 156,  "z": 118},
+        {"th": 2,  "x": -42,  "z": -34},
+        {"th": 3,  "x": 44,   "z": -32},
+        {"th": 4,  "x": -44,  "z": 36},
+        {"th": 5,  "x": 46,   "z": 38},
+        {"th": 6,  "x": -86,  "z": 0},
+        {"th": 7,  "x": 88,   "z": 2},
+        {"th": 8,  "x": -2,   "z": -68},
+        {"th": 9,  "x": 4,    "z": 72},
+        {"th": 10, "x": -84,  "z": 68},
+        {"th": 11, "x": 86,   "z": -64},
+        {"th": 12, "x": -128, "z": 32},
+        {"th": 13, "x": 128,  "z": -28},
+        {"th": 14, "x": -44,  "z": 108},
+        {"th": 15, "x": 48,   "z": 110},
+        {"th": 16, "x": -126, "z": -62},
+        {"th": 17, "x": 122,  "z": 86},
     ]
+
+    # Keep server/client collision payload lean: Town Halls get conservative core
+    # colliders here. Exact segmented walls and nearby defense colliders are generated
+    # client-side only for the currently detailed village, eliminating oversized
+    # invisible wall AABBs and reducing per-frame collision work.
     boxes = []
-
-    def add_wall_gate_ring(cx: float, cz: float, th: int):
-        if th < 2:
-            return
-        half = min(18 + th * 0.7, 29)
-        wall_h = min(1.4 + th * 0.08, 2.8)
-        gate = 6.5
-        boxes.append(box(cx-half, wall_h/2, cz, 2, wall_h, half*2, "#777777", f"th{th}_wall"))
-        boxes.append(box(cx+half, wall_h/2, cz, 2, wall_h, half*2, "#777777", f"th{th}_wall"))
-        seg = half-gate
-        for zoff in (-half, half):
-            boxes.append(box(cx-(gate+seg/2), wall_h/2, cz+zoff, seg, wall_h, 2, "#777777", f"th{th}_wall"))
-            boxes.append(box(cx+(gate+seg/2), wall_h/2, cz+zoff, seg, wall_h, 2, "#777777", f"th{th}_wall"))
-
     for village in village_layout:
         th = village["th"]
-        cx = village["x"]
-        cz = village["z"]
-        hall_w = min(7.5 + th * .25, 11.5)
-        hall_h = min(4.0 + th * .18, 7.2)
-        boxes.append(box(cx, hall_h/2, cz, hall_w, hall_h, hall_w, "#a56a40", f"th{th}_townhall"))
-        add_wall_gate_ring(cx, cz, th)
-
-        defense_positions = [(-13, -9), (13, 9), (-13, 9), (13, -9), (0, -15), (0, 15)]
-        unlocked = 1
-        if th >= 2: unlocked += 1
-        if th >= 3: unlocked += 1
-        if th >= 4: unlocked += 1
-        if th >= 5: unlocked += 1
-        if th >= 6: unlocked += 1
-        count = min(6, unlocked)
-        for i in range(count):
-            dx, dz = defense_positions[i]
-            size = 3.2 if th < 9 else 4.0
-            height = 2.8 if th < 9 else 4.2
-            boxes.append(box(cx+dx, height/2, cz+dz, size, height, size, "#666666", f"th{th}_defense"))
+        cx, cz = village["x"], village["z"]
+        hall_w = min(5.6 + th * .10, 7.3)
+        hall_h = min(3.5 + th * .12, 5.6)
+        boxes.append(box(cx, hall_h / 2, cz, hall_w, hall_h, hall_w, "#a56a40", f"th{th}_townhall"))
 
     return {
         "id": "clan", "name": "Clash of Clans", "short": "Clans", "theme": "clan",
-        "description": "Seventeen separate Town Hall villages are scattered across one large Clash world; each village uses its own level-specific Town Hall, walls and defenses.",
+        "description": "A compact landscape of Town Hall 1–17 villages with level-accurate wall and defense counts.",
         "boxes": boxes,
-        "spawns": [(-7, 0, 24), (7, 0, 24), (-11, 0, 18), (11, 0, 18), (-4, 0, 30), (4, 0, 30), (0, 0, 20), (0, 0, 34)],
-        "hardpoints": [(0, 0, 0), (-126, 0, 236), (318, 0, 202), (72, 0, 362)],
+        "spawns": [(-7, 0, 24), (7, 0, 24), (-11, 0, 18), (11, 0, 18), (-4, 0, 28), (4, 0, 28), (0, 0, 20), (0, 0, 30)],
+        "hardpoints": [(0, 0, 0), (-84, 0, 68), (86, 0, -64), (48, 0, 110)],
         "bounds": [-200000, 200000, -200000, 200000], "ground": "#90cf67", "sky": "#8fd4ff", "fog": "#ccecff",
         "build": False, "day_night": False, "mobs": False, "infinite": True,
         "town_hall_count": 17,
         "town_hall_layout": village_layout,
+        "wall_counts": CLAN_WALL_COUNTS,
+        "defense_counts": CLAN_DEFENSE_COUNTS,
     }
 
 WORLDS = {w["id"]: w for w in (classic_world(), voxel_world(), stadium_world(), battle_world(), clan_world())}
@@ -250,15 +255,15 @@ BLOCK_COLORS = {
     "leaves": "#3f8d35", "spruce": "#60452f", "spruce_leaves": "#315f39", "acacia": "#a85d32", "acacia_leaves": "#6b873a",
     "jungle_wood": "#795634", "jungle_leaves": "#2e8b3f", "sand": "#d9c681", "sandstone": "#c9b26f", "snow": "#f2f6f8",
     "ice": "#91c9e8", "red_sand": "#b75e36", "terracotta": "#a9573b", "podzol": "#72523a", "cobble": "#686868", "planks": "#b58a56",
-    "bedrock": "#343434",
+    "bedrock": "#343434", "deepslate": "#45454a", "coal_ore": "#3b3b3b", "iron_ore": "#8c7568",
 }
 VOXEL_GRID = 2
 VOXEL_CHUNK_CELLS = 8
 VOXEL_CHUNK_RADIUS = 1
-VOXEL_STREAM_RADIUS = 60
-VOXEL_MIN_Y = -7
-VOXEL_MAX_Y = 31
-VOXEL_TERRAIN_TYPES = {"grass", "dirt", "stone", "sand", "sandstone", "snow", "red_sand", "terracotta", "podzol", "bedrock"}
+VOXEL_STREAM_RADIUS = 54
+VOXEL_MIN_Y = -23
+VOXEL_MAX_Y = 47
+VOXEL_TERRAIN_TYPES = {"grass", "dirt", "stone", "sand", "sandstone", "snow", "red_sand", "terracotta", "podzol", "bedrock", "deepslate", "coal_ore", "iron_ore"}
 VILLAGE_BIOMES = {"plains", "savanna", "taiga", "meadow", "snowy_plains", "desert"}
 
 
@@ -329,6 +334,9 @@ def chunk_coord(v: float, span: int) -> int:
 
 def voxel_biome_at(x: float, z: float) -> str:
     """Deterministic broad biomes using low-frequency temperature/moisture fields."""
+    # Keep the initial play area open and readable instead of spawning under a canopy.
+    if x * x + z * z < 46 * 46:
+        return "plains"
     temp = math.sin(x * 0.0082) + 0.62 * math.cos(z * 0.0067) + 0.24 * math.sin((x + z) * 0.0033)
     wet = math.cos(x * 0.0071 - 0.8) + 0.58 * math.sin(z * 0.0086) + 0.20 * math.cos((x - z) * 0.0038)
     odd = math.sin(x * 0.0047 + z * 0.0052) + 0.55 * math.cos(x * 0.0029 - z * 0.0041)
@@ -361,15 +369,18 @@ def voxel_surface_layers(x: float, z: float, biome: Optional[str] = None) -> int
     broad = 0.75 * math.sin((x + 17) * 0.023) + 0.62 * math.cos((z - 11) * 0.021) + 0.34 * math.sin((x + z) * 0.012)
     detail = 0.33 * math.sin((x - z) * 0.071) + 0.22 * math.cos((x + z) * 0.059)
     amp = {
-        "plains": 0.55, "forest": 0.9, "taiga": 1.05, "snowy_plains": 0.65, "desert": 0.65,
-        "savanna": 0.9, "jungle": 1.15, "swamp": 0.30, "badlands": 1.15, "meadow": 1.25, "mountains": 2.7,
+        "plains": 0.72, "forest": 1.0, "taiga": 1.15, "snowy_plains": 0.78, "desert": 0.82,
+        "savanna": 1.05, "jungle": 1.25, "swamp": 0.34, "badlands": 1.55, "meadow": 1.55, "mountains": 3.9,
     }[biome]
-    base = 4.0 + broad * amp + detail * min(1.1, amp)
+    valley = 0.42 * math.sin(x * .009 - z * .006) + 0.28 * math.cos((x + z) * .008)
+    base = 4.0 + broad * amp + detail * min(1.25, amp) + valley * min(1.0, amp)
     if biome == "mountains":
-        base += 2.4 + abs(math.sin(x * .018) + math.cos(z * .016)) * 1.6
+        base += 3.2 + abs(math.sin(x * .018) + math.cos(z * .016)) * 2.1
+    elif biome == "badlands":
+        base += abs(math.sin(x * .022)) * 1.5
     if biome == "swamp":
-        base -= 0.6
-    return int(clamp(round(base), 2, 10))
+        base -= 0.8
+    return int(clamp(round(base), 1, 14))
 
 
 def voxel_surface_block(biome: str) -> str:
@@ -550,7 +561,7 @@ class Room:
                 wz = (cz * VOXEL_CHUNK_CELLS + lz) * VOXEL_GRID
                 biome = voxel_biome_at(wx, wz)
                 layers = voxel_surface_layers(wx, wz, biome)
-                bottom_index = -4
+                bottom_index = -12
                 for idx in range(bottom_index, layers):
                     y = 1 + idx * 2
                     key = f"{wx}:{y}:{wz}"
@@ -559,8 +570,11 @@ class Room:
                     if idx == bottom_index:
                         typ = "bedrock"
                     else:
-                        cave_score = math.sin(wx * 0.18 + y * 0.55) + math.cos(wz * 0.22 - y * 0.41)
-                        if idx < layers - 1 and idx > bottom_index + 1 and cave_score > 1.25:
+                        # Two overlapping 3-D cave fields give broad tunnels plus smaller pockets.
+                        cave_a = math.sin(wx * .115 + y * .34) + math.cos(wz * .126 - y * .31)
+                        cave_b = math.sin((wx + wz) * .073 + y * .27) + .65 * math.cos((wx - wz) * .064 - y * .22)
+                        deep_enough = idx < layers - 2 and idx > bottom_index + 1
+                        if deep_enough and (cave_a > 1.34 or (cave_a > .72 and cave_b > 1.22)):
                             continue
                         if idx == layers - 1:
                             typ = voxel_surface_block(biome)
@@ -571,18 +585,27 @@ class Room:
                         elif idx >= layers - 2:
                             typ = "dirt"
                         else:
-                            typ = "stone"
+                            # Deeper strata and sparse ores make underground exploration visibly richer.
+                            if y <= -11:
+                                typ = "deepslate"
+                            else:
+                                typ = "stone"
+                            ore = voxel_hash(wx // 2 + idx * 13, wz // 2 - idx * 7, 31)
+                            if y < 9 and ore > .972:
+                                typ = "coal_ore"
+                            if y < 1 and ore < .026:
+                                typ = "iron_ore"
                     self.blocks[key] = Block(key, wx, y, wz, typ, "world")
                 top = 1 + (layers - 1) * 2
                 column_tops[(wx, wz)] = (top, biome)
 
         # Biome vegetation. Leaves have their own block type so spawn selection never mistakes the canopy for terrain.
         for (wx, wz), (top, biome) in column_tops.items():
-            spawn_clear = any(abs(wx - sp[0]) <= 5 and abs(wz - sp[2]) <= 5 for sp in self.world_cfg["spawns"]) or (abs(wx) <= 7 and abs(wz) <= 7)
+            spawn_clear = any(abs(wx - sp[0]) <= 12 and abs(wz - sp[2]) <= 12 for sp in self.world_cfg["spawns"]) or (wx * wx + wz * wz <= 48 * 48)
             if spawn_clear:
                 continue
             tree_score = voxel_hash(wx // 2, wz // 2, 4)
-            threshold = {"forest": .77, "taiga": .80, "jungle": .68, "savanna": .88, "plains": .94, "meadow": .95, "swamp": .90}.get(biome, 2.0)
+            threshold = {"forest": .925, "taiga": .94, "jungle": .885, "savanna": .975, "plains": .992, "meadow": .993, "swamp": .972}.get(biome, 2.0)
             if tree_score < threshold:
                 continue
             trunk = "wood"
@@ -712,7 +735,7 @@ class Room:
         # surface blocks farther out. This keeps Minecraft-style horizons visible
         # without shipping thousands of hidden underground cubes every update.
         r2 = radius * radius
-        core2 = 12 * 12
+        core2 = 10 * 10
         out = []
         for b in self.blocks.values():
             d2 = (b.x - x) ** 2 + (b.z - z) ** 2
@@ -897,7 +920,7 @@ async def terms():
 async def health():
     return {
         "ok": True,
-        "version": "2.5.0",
+        "version": "2.6.0",
         "rooms": len(rooms),
         "players": sum(len(r.players) for r in rooms.values()),
     }
@@ -910,7 +933,7 @@ async def config():
 
 @app.get("/api/site-config")
 async def site_config():
-    return JSONResponse({"ads": ad_config(), "version": "2.5.0", "brand": "Blockfront Worlds"})
+    return JSONResponse({"ads": ad_config(), "version": "2.6.0", "brand": "Blockfront Worlds"})
 
 
 @app.get("/api/rooms")
@@ -1000,7 +1023,7 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                     tz = float(msg.get("z", p.z))
                 except (TypeError, ValueError):
                     continue
-                if math.hypot(tx - p.x, tz - p.z) <= 45:
+                if math.hypot(tx - p.x, tz - p.z) <= 60:
                     room.ensure_voxel_area(tx, tz, VOXEL_CHUNK_RADIUS)
                     await room.emit_blocks(only=pid)
 
@@ -1048,10 +1071,13 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                     continue
                 # Protect the demo lever/lamp circuit from being instantly erased
                 # only if it was seeded by the world; every other block is mineable.
-                room.blocks.pop(key, None)
+                removed = room.blocks.pop(key, None)
                 room.recompute_power()
                 p.score += 5
-                await room.emit_blocks()
+                if removed and removed.type in {"redstone", "lamp", "lever"}:
+                    await room.emit_blocks()
+                else:
+                    await room.emit({"t": "block_remove", "key": key})
 
             elif t == "block_place" and p.alive and room.world == "voxel":
                 now = time.time()
@@ -1072,14 +1098,17 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                 if math.dist((p.x, p.y + 3.0, p.z), (x, y, z)) > 8.2:
                     continue
                 key = f"{x}:{y}:{z}"
-                if key in room.blocks or len(room.blocks) >= 12000:
+                if key in room.blocks or len(room.blocks) >= 60000:
                     continue
                 # Avoid trapping a player inside a new cube.
                 if any(abs(q.x - x) < 1.25 and abs((q.y + .9) - y) < 1.7 and abs(q.z - z) < 1.25 for q in room.players.values() if q.alive):
                     continue
-                room.add_block(x, y, z, typ, p.id)
+                placed = room.add_block(x, y, z, typ, p.id)
                 room.recompute_power()
-                await room.emit_blocks()
+                if typ in {"redstone", "lamp", "lever"}:
+                    await room.emit_blocks()
+                else:
+                    await room.emit({"t": "block_add", "block": placed.public()})
 
             elif t == "block_use" and p.alive and room.world == "voxel":
                 key = str(msg.get("key", ""))

@@ -2,6 +2,8 @@ from fastapi.testclient import TestClient
 
 from app import (
     BLOCK_TYPES,
+    CLAN_DEFENSE_COUNTS,
+    CLAN_WALL_COUNTS,
     CLASSES,
     WEAPONS,
     WORLD_ORDER,
@@ -25,7 +27,7 @@ def test_health():
     assert r.status_code == 200
     body = r.json()
     assert body['ok'] is True
-    assert body['version'] == '2.5.0'
+    assert body['version'] == '2.6.0'
 
 
 def test_config_contains_five_worlds():
@@ -168,7 +170,7 @@ def test_voxel_biome_generation_helpers():
     seen = {voxel_biome_at(x, z) for x, z in samples}
     assert seen <= known
     assert len(seen) >= 7
-    assert all(2 <= voxel_surface_layers(x, z) <= 10 for x, z in list(samples)[:40])
+    assert all(1 <= voxel_surface_layers(x, z) <= 14 for x, z in list(samples)[:40])
 
 
 def test_clan_layout_is_dense_enough_for_continuous_map():
@@ -176,4 +178,23 @@ def test_clan_layout_is_dense_enough_for_continuous_map():
     coords = [(v['x'], v['z']) for v in layout]
     for i, (x, z) in enumerate(coords):
         nearest = min(((x-x2)**2 + (z-z2)**2) ** .5 for j, (x2, z2) in enumerate(coords) if i != j)
-        assert nearest < 105
+        assert nearest < 80
+
+
+def test_clan_exact_wall_and_defense_counts():
+    expected_walls = {1:0,2:25,3:50,4:75,5:100,6:125,7:175,8:225,9:250,10:275,11:300,12:300,13:300,14:325,15:325,16:325,17:325}
+    assert CLAN_WALL_COUNTS == expected_walls
+    assert sum(CLAN_DEFENSE_COUNTS[1].values()) == 1
+    assert sum(CLAN_DEFENSE_COUNTS[8].values()) == 25
+    assert sum(CLAN_DEFENSE_COUNTS[12].values()) == 45
+    assert sum(CLAN_DEFENSE_COUNTS[15].values()) == 55
+    assert CLAN_DEFENSE_COUNTS[17]['firespitter'] == 2
+    assert CLAN_DEFENSE_COUNTS[17]['multigear'] == 1
+    assert CLAN_DEFENSE_COUNTS[17]['infernoartillery'] == 1
+    assert CLAN_DEFENSE_COUNTS[17].get('cannon', 0) == 0
+
+def test_voxel_depth_and_spawn_clearing():
+    room = Room('DEEP', 'FFA', 'voxel')
+    assert any(b.y <= -20 for b in room.blocks.values())
+    assert any(b.type in {'deepslate','coal_ore','iron_ore'} for b in room.blocks.values())
+    assert voxel_biome_at(0, 0) == 'plains'
