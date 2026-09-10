@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from app import (
@@ -30,7 +32,7 @@ def test_health():
     assert r.status_code == 200
     body = r.json()
     assert body['ok'] is True
-    assert body['version'] == '3.1.0'
+    assert body['version'] == '3.2.0'
 
 
 def test_config_contains_five_worlds():
@@ -255,3 +257,21 @@ def test_three_by_three_recipe_requires_crafting_table_scope():
     assert room.craft(p, 'wooden_pickaxe', 'inventory') is None
     crafted = room.craft(p, 'wooden_pickaxe', 'table')
     assert crafted['item'] == 'wooden_pickaxe' and crafted['count'] == 1
+
+
+def test_client_regressions_for_v32():
+    js = Path('static/game.js').read_text(encoding='utf-8')
+    assert 'function clanGLBClone' in js
+    assert 'function preloadClanGLBs' in js
+    assert 'against_key:againstKey' in js
+    assert 'if(state.ws!==ws)return' in js
+    assert "state.world!=='voxel'&&['blocks','blocks_patch'" in js
+
+
+def test_clan_glb_assets_are_present_and_valid():
+    model_dir = Path('static/assets/clan_models')
+    names = {'town_hall','archer_tower','cannon','laboratory','barbarian','giant','wizard','pekka','wall_piece'}
+    for name in names:
+        data = (model_dir / f'{name}.glb').read_bytes()
+        assert data[:4] == b'glTF'
+        assert len(data) > 1000

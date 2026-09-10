@@ -48,6 +48,40 @@ const raycaster=new THREE.Raycaster();
 const textureCache=new Map();
 const clanMaterialCache=new Map();
 const clanGeometryCache=new Map();
+const clanGLBLoader=new GLTFLoader();
+const clanGLBTemplates=new Map();
+const clanGLBLoading=new Map();
+const CLAN_GLB_PATHS={
+  town_hall:'/static/assets/clan_models/town_hall.glb',
+  archer_tower:'/static/assets/clan_models/archer_tower.glb',
+  cannon:'/static/assets/clan_models/cannon.glb',
+  laboratory:'/static/assets/clan_models/laboratory.glb',
+  barbarian:'/static/assets/clan_models/barbarian.glb',
+  giant:'/static/assets/clan_models/giant.glb',
+  wizard:'/static/assets/clan_models/wizard.glb',
+  pekka:'/static/assets/clan_models/pekka.glb',
+  wall_piece:'/static/assets/clan_models/wall_piece.glb'
+};
+function requestClanGLB(name){
+  if(clanGLBTemplates.has(name)||clanGLBLoading.has(name)||!CLAN_GLB_PATHS[name])return;
+  const pending=clanGLBLoader.loadAsync(CLAN_GLB_PATHS[name]).then(gltf=>{
+    const root=gltf.scene||gltf.scenes?.[0];
+    if(!root)throw new Error(`No scene in ${name}.glb`);
+    root.traverse(n=>{if(n.isMesh){n.castShadow=false;n.receiveShadow=false;n.frustumCulled=true}});
+    clanGLBTemplates.set(name,root);
+    clanGLBLoading.delete(name);
+    if(state.world==='clan'){state.clanRenderKey='';requestAnimationFrame(()=>updateClanProgressionRender(true));}
+  }).catch(err=>{console.warn(`Clan model ${name} failed to load`,err);clanGLBLoading.delete(name)});
+  clanGLBLoading.set(name,pending);
+}
+function preloadClanGLBs(){for(const name of Object.keys(CLAN_GLB_PATHS))requestClanGLB(name)}
+function clanGLBClone(name,group,x,y,z,scale=1,rotY=0,tint=null){
+  const template=clanGLBTemplates.get(name);
+  if(!template){requestClanGLB(name);return null;}
+  const clone=template.clone(true);clone.position.set(x,y,z);clone.rotation.y=rotY;clone.scale.setScalar(scale);
+  if(tint!==null){clone.traverse(n=>{if(n.isMesh&&n.material){const mats=Array.isArray(n.material)?n.material:[n.material];n.material=mats.map(m=>{const c=m.clone();if(c.color)c.color.lerp(new THREE.Color(tint),.16);return c});if(n.material.length===1)n.material=n.material[0]}})}
+  group.add(clone);return clone;
+}
 
 async function boot(){
   [state.config,state.siteConfig]=await Promise.all([
@@ -61,7 +95,7 @@ async function boot(){
   const qworld=url.searchParams.get('world');if(qworld&&state.config.worlds[qworld])state.world=qworld;
   const qroom=url.searchParams.get('room');const qmode=url.searchParams.get('mode');
   if(qroom)state.room=qroom.toUpperCase();if(qmode)state.mode=qmode.toUpperCase();
-  setupScene();setupUI();applySettings();buildClassGrid();buildGunGrid();buildWorldSelectors();buildWorld(state.world);refreshAllUI();
+  setupScene();preloadClanGLBs();setupUI();applySettings();buildClassGrid();buildGunGrid();buildWorldSelectors();buildWorld(state.world);refreshAllUI();
   probeOptionalClanMusic();
   initAds(state.siteConfig);
   connect();animate();
@@ -104,12 +138,17 @@ function voxelMaterial(type,powered=false){
 
 function buildWorld(id){
   const w=state.config.worlds[id];if(!w)return;
-  clearGroup(worldGroup);clearGroup(streamGroup);clearGroup(decorGroup);clearGroup(dynamicGroup);clearGroup(mobGroup);state.dynamicBlocks.clear();state.mobs.clear();state.streamChunk='';state.voxelRenderKey='';state.voxelHorizonKey='';state.clanRenderKey='';state.clanCollisionBoxes=[];state.clanPatrols=[];state.mining=null;state.miningHeld=false;state.miningSentKey=null;state.musicNextAt=0;if(miningOverlay){scene.remove(miningOverlay);miningOverlay=null}guineaPig=null;
+  clearGroup(worldGroup);clearGroup(streamGroup);clearGroup(decorGroup);clearGroup(dynamicGroup);clearGroup(mobGroup);clearGroup(remoteGroup);state.dynamicBlocks.clear();state.mobs.clear();state.remote.clear();state.streamChunk='';state.voxelRenderKey='';state.voxelHorizonKey='';state.clanRenderKey='';state.clanCollisionBoxes=[];state.clanPatrols=[];state.mining=null;state.miningHeld=false;state.miningSentKey=null;state.musicNextAt=0;if(miningOverlay){scene.remove(miningOverlay);miningOverlay=null}guineaPig=null;
   renderer.shadowMap.enabled=state.settings.quality&&id!=='clan'&&id!=='voxel';sun.castShadow=renderer.shadowMap.enabled;
   const ratioCap=id==='voxel'?1.0:id==='clan'?1.08:(state.settings.quality?1.45:1.05);renderer.setPixelRatio(Math.min(devicePixelRatio,ratioCap));
   scene.background=color(w.sky);scene.fog=new THREE.Fog(color(w.fog),id==='voxel'?190:58,id==='voxel'?560:id==='clan'?300:id==='stadium'?145:125);hemi.intensity=id==='clan'?2.45:2;sun.intensity=id==='clan'?1.5:1.25;moonLight.intensity=0;stormRing=null;skySun=skyMoon=stars=null;
-  buildGround(w);for(const b of w.boxes)addStyledWorldBox(w,b);buildDecor(w);updateStreamingWorld(true);state.currentBoxes=[...w.boxes];
-  $('#voxelHud').classList.toggle('hidden',id!=='voxel');$('#dayNight').classList.toggle('hidden',id!=='voxel');state.buildMode=false;if(id==='voxel')state.mcHotbar=0;updateBuildHud();refreshWorldUI();createWeapon();
+  buildGround(w);for(const b of w.boxes)addStyledWorldBox(w,b);buildDecor(w);state.currentBoxes=[...w.boxes];
+  // Reset world-specific held-item state before rebuilding the first-person model.
+  state.buildMode=false;if(id==='voxel')state.mcHotbar=0;
+  // Switch the held item immediately, even if optional world decoration fails to load.
+  createWeapon();
+  try{updateStreamingWorld(true)}catch(err){console.error('World streaming render failed',err);toast('Some world models failed to render; using fallback graphics.')}
+  $('#voxelHud').classList.toggle('hidden',id!=='voxel');$('#dayNight').classList.toggle('hidden',id!=='voxel');updateBuildHud();updateWeaponVisibility();refreshWorldUI();
 }
 
 function clanGrassTexture(){
@@ -519,6 +558,7 @@ function clanDefenseCollider(type,x,z){
 }
 function clanBlobShadow(group,x=0,z=0,scale=1){const geo=clanSharedGeometry('blob',()=>new THREE.CircleGeometry(1,20));let mat=clanMaterialCache.get('blobMat');if(!mat){mat=new THREE.MeshBasicMaterial({color:0x23351c,transparent:true,opacity:.20,depthWrite:false});mat.userData.sharedResource=true;clanMaterialCache.set('blobMat',mat)}const sh=new THREE.Mesh(geo,mat);sh.rotation.x=-Math.PI/2;sh.position.set(x,.025,z);sh.scale.set(1.25*scale,.72*scale,1);sh.renderOrder=1;group.add(sh);return sh}
 function createClanTroop(kind){
+  const template=clanGLBTemplates.get(kind);if(template){const model=template.clone(true);model.traverse(n=>{if(n.isMesh){n.castShadow=false;n.receiveShadow=false}});return model}requestClanGLB(kind);
   const g=new THREE.Group(),skin=0xe0a77b,brown=0x6d432d,steel=0xcbd1d8,purple=0x5c4598;
   clanBlobShadow(g,0,0,kind==='giant'?1.35:kind==='pekka'?1.18:.82);
   if(kind==='barbarian'){
@@ -689,9 +729,9 @@ function setupUI(){
   $('#saveSettingsBtn').onclick=()=>{state.name=$('#nameInput').value.trim()||state.name;state.settings.sens=+$('#sensInput').value;state.settings.fov=+$('#fovInput').value;state.settings.bob=$('#bobInput').checked;state.settings.quality=$('#qualityInput').checked;state.settings.musicVolume=clamp(+$('#musicVolumeInput').value/100,0,1);state.settings.sfxVolume=clamp(+$('#sfxVolumeInput').value/100,0,1);localStorage.setItem('bf_name',state.name);localStorage.setItem('bf_sens',state.settings.sens);localStorage.setItem('bf_fov',state.settings.fov);localStorage.setItem('bf_bob',state.settings.bob?'1':'0');localStorage.setItem('bf_quality',state.settings.quality?'1':'0');localStorage.setItem('bf_music_volume',Math.round(state.settings.musicVolume*100));localStorage.setItem('bf_sfx_volume',Math.round(state.settings.sfxVolume*100));applySettings();buildWorld(state.world);connect(true);closeModal('settingsModal');toast('Settings saved')};
   $('#sensInput').oninput=()=>$('#sensVal').textContent=(+$('#sensInput').value).toFixed(2);$('#fovInput').oninput=()=>$('#fovVal').textContent=$('#fovInput').value;$('#musicVolumeInput').oninput=()=>$('#musicVolumeVal').textContent=`${$('#musicVolumeInput').value}%`;$('#sfxVolumeInput').oninput=()=>$('#sfxVolumeVal').textContent=`${$('#sfxVolumeInput').value}%`;
   document.addEventListener('pointerlockchange',()=>{if(document.pointerLockElement!==renderer.domElement&&state.playing&&!state.chat&&!$('#roundBreak').classList.contains('hidden'))return;if(document.pointerLockElement!==renderer.domElement&&state.playing&&!state.chat)showMenu()});
-  document.addEventListener('mousemove',e=>{if(document.pointerLockElement===renderer.domElement&&!state.chat){state.yaw-=e.movementX*.0022*state.settings.sens;state.pitch-=e.movementY*.0022*state.settings.sens;state.pitch=clamp(state.pitch,-1.48,1.48)}});
+  document.addEventListener('mousemove',e=>{if(document.pointerLockElement===renderer.domElement&&!state.chat){state.yaw-=e.movementX*.0022*state.settings.sens;state.pitch-=e.movementY*.0022*state.settings.sens;state.pitch=clamp(state.pitch,-1.48,1.48);if(state.world!=='voxel'||mcSelectedItem()===MC_RESERVED_GUN)state.ads=(e.buttons&2)!==0}});
   addEventListener('keydown',onKeyDown);addEventListener('keyup',e=>{state.keys[e.code]=false;if(e.code==='Tab')$('#scoreboard').classList.add('hidden');if(e.code==='KeyW')state.mcSprint=false});
-  addEventListener('mousedown',e=>{if(!state.playing||state.chat||state.inventoryOpen)return;if(state.world==='voxel'){const held=mcSelectedItem(),hit=blockRay();if(e.button===0){if(held===MC_RESERVED_GUN){state.mouseDown=true;shoot()}else if(hit?.block){startMining()}else if(held===MC_RESERVED_SWORD||mcItemMeta(held).tool==='sword'){wsSend({t:'melee'});playSwordSound()}}if(e.button===2){if(hit?.block?.type==='crafting_table'){openVoxelInventory('table');return}if(hit?.block?.type==='lever'&&!held){useBlock();return}if(held===MC_RESERVED_GUN){state.ads=true}else if(held&&mcItemMeta(held).placeable&&mcInventoryCount(held)>0){placeBlock(held);playBlockSound('place')}else if(hit?.block?.type==='lever'){useBlock()}}return}if(e.button===0){state.mouseDown=true;shoot()}if(e.button===2)state.ads=true});
+  addEventListener('mousedown',e=>{if(e.button===2)e.preventDefault();if(!state.playing||state.chat||state.inventoryOpen)return;if(state.world==='voxel'){const held=mcSelectedItem(),hit=blockRay();if(e.button===0){if(held===MC_RESERVED_GUN){state.mouseDown=true;shoot()}else if(hit?.block){startMining()}else if(held===MC_RESERVED_SWORD||mcItemMeta(held).tool==='sword'){wsSend({t:'melee'});playSwordSound()}}if(e.button===2){if(hit?.block?.type==='crafting_table'){openVoxelInventory('table');return}if(hit?.block?.type==='lever'&&!held){useBlock();return}if(held===MC_RESERVED_GUN){state.ads=true}else if(held&&mcItemMeta(held).placeable&&mcInventoryCount(held)>0){placeBlock(held);playBlockSound('place')}else if(hit?.block?.type==='lever'){useBlock()}}return}if(e.button===0){state.mouseDown=true;shoot()}if(e.button===2)state.ads=true});
   addEventListener('mouseup',e=>{if(e.button===0){state.mouseDown=false;if(state.world==='voxel')stopMining()}if(e.button===2)state.ads=false});addEventListener('wheel',e=>{if(state.world==='voxel'){e.preventDefault();setMinecraftHotbar((state.mcHotbar+(e.deltaY>0?1:-1)+MC_HOTBAR_SIZE)%MC_HOTBAR_SIZE)}},{passive:false});addEventListener('contextmenu',e=>e.preventDefault());
   $('#chatInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&state.chat){e.stopPropagation();const t=e.target.value.trim();if(t)wsSend({t:'chat',text:t});e.target.value='';toggleChat(false)}});
 }
@@ -736,10 +776,11 @@ function connect(force=false){
   const proto=location.protocol==='https:'?'wss':'ws';const url=`${proto}://${location.host}/ws/${encodeURIComponent(state.room)}?name=${encodeURIComponent(state.name)}&klass=${encodeURIComponent(state.klass)}&mode=${encodeURIComponent(state.mode)}&world=${encodeURIComponent(state.world)}&weapon=${encodeURIComponent(state.weapon)}`;
   const ws=new WebSocket(url);state.ws=ws;const opened=performance.now();$('#menuPing').textContent='CONNECTING';
   ws.onopen=()=>{state.connected=true;state.ping=Math.round(performance.now()-opened);$('#menuPing').textContent=`${state.ping} PING`};
-  ws.onclose=()=>{state.connected=false;$('#menuPing').textContent='RECONNECTING';if(state.ws===ws)setTimeout(()=>connect(),1200)};ws.onerror=()=>{$('#menuPing').textContent='OFFLINE'};ws.onmessage=e=>handleMessage(JSON.parse(e.data));
+  ws.onclose=()=>{state.connected=false;$('#menuPing').textContent='RECONNECTING';if(state.ws===ws)setTimeout(()=>connect(),1200)};ws.onerror=()=>{$('#menuPing').textContent='OFFLINE'};ws.onmessage=e=>{if(state.ws!==ws)return;const msg=JSON.parse(e.data);if(msg.world&&msg.world!==state.world&&msg.t!=='welcome')return;handleMessage(msg)};
 }
 function wsSend(x){if(state.ws&&state.ws.readyState===1)state.ws.send(JSON.stringify(x))}
 function handleMessage(m){
+  if(state.world!=='voxel'&&['blocks','blocks_patch','block_add','block_remove','item_pickup','inventory','craft_result','craft_error','block_place_error'].includes(m.t))return;
   if(m.t==='welcome'){
     state.id=m.id;state.room=m.room;state.mode=m.mode;if(m.player?.weapon&&state.config.weapons?.[m.player.weapon]){state.weapon=m.player.weapon;localStorage.setItem('bf_weapon',state.weapon)}if(m.world&&m.world!==state.world){state.world=m.world;buildWorld(state.world);buildWorldSelectors()}state.pos.set(m.player.x,m.player.y,m.player.z);state.hp=m.player.hp;state.alive=true;state.ammo=weaponCfg().mag;if(state.world==='voxel'){syncBlocks(m.blocks||[]);syncInventory(m.player?.inventory||{})}refreshAllUI();
   }else if(m.t==='snapshot'){
@@ -894,14 +935,34 @@ function voxelFallbackGround(x,z){const gx=Math.round(x/2)*2,gz=Math.round(z/2)*
 function requestVoxelPrefetch(x,z){const now=performance.now();if(now-state.prefetchAt<120)return;state.prefetchAt=now;wsSend({t:'voxel_prefetch',x,z})}
 function updateVoxelPrefetch(){if(state.world!=='voxel'||!state.playing)return;const speed=Math.hypot(state.vel.x,state.vel.z),lead=4.5+Math.min(4.5,speed*.35),tx=state.pos.x+state.vel.x*lead,tz=state.pos.z+state.vel.z*lead,moved=Math.hypot(state.pos.x-state.prefetchX,state.pos.z-state.prefetchZ);if(!voxelColumnLoaded(tx,tz)||moved>9)requestVoxelPrefetch(tx,tz)}
 function placementNormal(hit){
-  if(!hit?.block)return new THREE.Vector3(0,1,0);const b=hit.block,p=hit.point||new THREE.Vector3(b.x,b.y+1,b.z),dx=(p.x-b.x),dy=(p.y-b.y),dz=(p.z-b.z),ax=Math.abs(dx),ay=Math.abs(dy),az=Math.abs(dz);if(ax>=ay&&ax>=az)return new THREE.Vector3(Math.sign(dx)||1,0,0);if(az>=ax&&az>=ay)return new THREE.Vector3(0,0,Math.sign(dz)||1);return new THREE.Vector3(0,Math.sign(dy)||1,0)
+  if(!hit?.block)return new THREE.Vector3(0,1,0);
+  // Voxel instances are translated only, so the raycaster's cube-face normal is exact.
+  // Using the hit-point distance from the block centre misclassified shallow top-face
+  // clicks as side clicks, which tried to place inside neighbouring terrain.
+  if(hit.face?.normal){
+    const n=hit.face.normal;
+    const ax=Math.abs(n.x),ay=Math.abs(n.y),az=Math.abs(n.z);
+    if(ay>=ax&&ay>=az)return new THREE.Vector3(0,Math.sign(n.y)||1,0);
+    if(ax>=az)return new THREE.Vector3(Math.sign(n.x)||1,0,0);
+    return new THREE.Vector3(0,0,Math.sign(n.z)||1);
+  }
+  const b=hit.block,p=hit.point||new THREE.Vector3(b.x,b.y+1,b.z),dx=p.x-b.x,dy=p.y-b.y,dz=p.z-b.z,ax=Math.abs(dx),ay=Math.abs(dy),az=Math.abs(dz);
+  if(ay>=ax&&ay>=az)return new THREE.Vector3(0,Math.sign(dy)||1,0);
+  if(ax>=az)return new THREE.Vector3(Math.sign(dx)||1,0,0);
+  return new THREE.Vector3(0,0,Math.sign(dz)||1);
 }
 function fallbackPlacementTarget(){const origin=camera.getWorldPosition(new THREE.Vector3()),dir=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);for(let d=2;d<=7;d+=.35){const p=origin.clone().addScaledVector(dir,d),gx=Math.round(p.x/2)*2,gz=Math.round(p.z/2)*2;let gy=Math.round((p.y-1)/2)*2+1;for(let oy=5;oy>=-5;oy-=2){const key=`${gx}:${gy+oy}:${gz}`;const b=state.dynamicBlocks.get(key);if(b)return [b.x,b.y+2,b.z]}const surface=voxelFallbackGround(gx,gz);if(Math.abs(p.y-surface)<1.4)return [gx,Math.round((surface+1-1)/2)*2+1,gz]}return null}
 function placeBlock(item=mcSelectedItem()){
   if(!item||!mcItemMeta(item).placeable||mcInventoryCount(item)<=0){toast('Select a placeable block first');return}
-  const hit=blockRay();let pos=null;if(hit?.block){const b=hit.block,n=placementNormal(hit);pos=[b.x+n.x*2,b.y+n.y*2,b.z+n.z*2]}else pos=fallbackPlacementTarget();if(!pos){toast('Aim at a nearby block face');return}
-  const x=Math.round(pos[0]/2)*2,z=Math.round(pos[2]/2)*2,y=Math.round((pos[1]-1)/2)*2+1,key=`${x}:${y}:${z}`;if(state.dynamicBlocks.has(key)){toast('That space is occupied');return}
-  const optimistic={key,x,y,z,type:item,owner:state.id,powered:false};state.dynamicBlocks.set(key,optimistic);state.pendingPlacements.set(key,optimistic);state.voxelRenderKey='';state.voxelHorizonKey='';rebuildVoxelRender(true);wsSend({t:'block_place',pos:[x,y,z],type:item});
+  const hit=blockRay();let pos=null,againstKey=null,face=null;
+  if(hit?.block){
+    const b=hit.block,n=placementNormal(hit);againstKey=hit.blockKey;face=[n.x,n.y,n.z];pos=[b.x+n.x*2,b.y+n.y*2,b.z+n.z*2];
+  }else pos=fallbackPlacementTarget();
+  if(!pos){toast('Aim at a nearby block face');return}
+  const x=Math.round(pos[0]/2)*2,z=Math.round(pos[2]/2)*2,y=Math.round((pos[1]-1)/2)*2+1,key=`${x}:${y}:${z}`;
+  if(state.dynamicBlocks.has(key)){toast('That block face has no free space');return}
+  const optimistic={key,x,y,z,type:item,owner:state.id,powered:false};state.dynamicBlocks.set(key,optimistic);state.pendingPlacements.set(key,optimistic);state.voxelRenderKey='';state.voxelHorizonKey='';rebuildVoxelRender(true);
+  wsSend({t:'block_place',pos:[x,y,z],type:item,against_key:againstKey,face});
 }
 function useBlock(){const hit=blockRay();if(hit?.blockKey)wsSend({t:'block_use',key:hit.blockKey})}
 function toggleBuildMode(){if(state.world!=='voxel'){toast('Voxel tools are only available in Voxel Frontier');return}setMinecraftHotbar(state.mcHotbar===0?1:0)}

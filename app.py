@@ -21,7 +21,7 @@ STATIC = ROOT / "static"
 
 logger = logging.getLogger("blockfront")
 
-app = FastAPI(title="Blockfront Worlds", version="3.1.0")
+app = FastAPI(title="Blockfront Worlds", version="3.2.0")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
@@ -1087,7 +1087,7 @@ async def terms():
 async def health():
     return {
         "ok": True,
-        "version": "3.1.0",
+        "version": "3.2.0",
         "rooms": len(rooms),
         "players": sum(len(r.players) for r in rooms.values()),
     }
@@ -1100,7 +1100,7 @@ async def config():
 
 @app.get("/api/site-config")
 async def site_config():
-    return JSONResponse({"ads": ad_config(), "version": "3.1.0", "brand": "Blockfront Worlds"})
+    return JSONResponse({"ads": ad_config(), "version": "3.2.0", "brand": "Blockfront Worlds"})
 
 
 @app.get("/api/rooms")
@@ -1282,9 +1282,26 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                 raw_pos = [float(v) for v in msg.get("pos", [0, 1, 0])[:3]]
                 x = grid_round(raw_pos[0], 2)
                 z = grid_round(raw_pos[2], 2)
-                # Voxel block centers sit at y=1,3,5,... so a cube rests flush
-                # on the ground or on the cube below it.
                 y = int(round((raw_pos[1] - 1) / 2) * 2 + 1)
+                # Prefer the authoritative server-side target block + clicked face.
+                # This keeps placement aligned with Minecraft's adjacent-face rule and
+                # prevents client/server disagreement when hidden terrain blocks exist.
+                against_key = str(msg.get("against_key") or "")
+                face = msg.get("face")
+                against = room.blocks.get(against_key) if against_key else None
+                if against is not None and isinstance(face, list) and len(face) >= 3:
+                    vals = [float(face[i]) for i in range(3)]
+                    axis = max(range(3), key=lambda i: abs(vals[i]))
+                    step = 1 if vals[axis] >= 0 else -1
+                    fx = step if axis == 0 else 0
+                    fy = step if axis == 1 else 0
+                    fz = step if axis == 2 else 0
+                    x = against.x + fx * 2
+                    y = against.y + fy * 2
+                    z = against.z + fz * 2
+                x = grid_round(x, 2)
+                z = grid_round(z, 2)
+                y = int(round((y - 1) / 2) * 2 + 1)
                 y = int(clamp(y, VOXEL_MIN_Y, VOXEL_MAX_Y))
                 room.ensure_voxel_area(x, z, VOXEL_CHUNK_RADIUS)
                 if math.dist((p.x, p.y + 3.0, p.z), (x, y, z)) > 9.5:
