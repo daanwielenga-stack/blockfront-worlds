@@ -13,6 +13,8 @@ from app import (
     ray_aabb,
     ray_sphere,
     rooms,
+    voxel_biome_at,
+    voxel_surface_layers,
 )
 
 client = TestClient(app)
@@ -23,7 +25,7 @@ def test_health():
     assert r.status_code == 200
     body = r.json()
     assert body['ok'] is True
-    assert body['version'] == '2.4.0'
+    assert body['version'] == '2.5.0'
 
 
 def test_config_contains_five_worlds():
@@ -36,6 +38,7 @@ def test_config_contains_five_worlds():
     assert data['worlds']['voxel']['build'] is True
     assert data['worlds']['voxel']['day_night'] is True
     assert data['worlds']['voxel']['mobs'] is True
+    assert len(data['worlds']['voxel']['biomes']) >= 10
     assert {'Assault Rifle', 'Sniper Rifle', 'Shotgun', 'Machine Gun', 'Milan Gun'} <= set(data['weapons'])
     assert data['weapons']['Milan Gun']['nonlethal'] is True
     assert data['weapons']['Milan Gun']['damage'] == 0
@@ -83,6 +86,7 @@ def test_room_isolated_by_world():
     assert b.world == 'voxel'
     assert b.blocks
     assert b.mobs
+    assert any(block.type == 'bedrock' for block in b.blocks.values())
     assert any(block.y < 1 for block in b.blocks.values())
 
 
@@ -130,7 +134,8 @@ def test_voxel_spawn_is_above_surface():
     b.players[p.id] = p
     b.spawn(p)
     assert p.y >= 8
-    top = max(block.y for block in b.blocks.values() if block.x == p.x and block.z == p.z) + 1
+    terrain_types = {'grass','dirt','stone','sand','sandstone','snow','red_sand','terracotta','podzol'}
+    top = max(block.y for block in b.blocks.values() if block.x == p.x and block.z == p.z and block.type in terrain_types) + 1
     assert p.y >= top
 
 
@@ -155,3 +160,20 @@ def test_clan_progression_geometry():
     assert len({x for x, _ in coords}) > 8 and len({z for _, z in coords}) > 8
     th17 = next(v for v in layout if v['th'] == 17)
     assert th17['x'] != 0
+
+
+def test_voxel_biome_generation_helpers():
+    known = {'plains','forest','taiga','snowy_plains','desert','savanna','jungle','swamp','badlands','meadow','mountains'}
+    samples = {(x, z) for x in range(-1200, 1201, 120) for z in range(-1200, 1201, 120)}
+    seen = {voxel_biome_at(x, z) for x, z in samples}
+    assert seen <= known
+    assert len(seen) >= 7
+    assert all(2 <= voxel_surface_layers(x, z) <= 10 for x, z in list(samples)[:40])
+
+
+def test_clan_layout_is_dense_enough_for_continuous_map():
+    layout = WORLDS['clan']['town_hall_layout']
+    coords = [(v['x'], v['z']) for v in layout]
+    for i, (x, z) in enumerate(coords):
+        nearest = min(((x-x2)**2 + (z-z2)**2) ** .5 for j, (x2, z2) in enumerate(coords) if i != j)
+        assert nearest < 105

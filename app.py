@@ -21,7 +21,7 @@ STATIC = ROOT / "static"
 
 logger = logging.getLogger("blockfront")
 
-app = FastAPI(title="Blockfront Worlds", version="2.4.0")
+app = FastAPI(title="Blockfront Worlds", version="2.5.0")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
@@ -75,8 +75,8 @@ def classic_world():
     boxes = [
         box(0, 2.5, -40, 82, 5, 2, "#303238", "wall"), box(0, 2.5, 40, 82, 5, 2, "#303238", "wall"),
         box(-40, 2.5, 0, 2, 5, 82, "#303238", "wall"), box(40, 2.5, 0, 2, 5, 82, "#303238", "wall"),
-        box(-23, 5, -18, 14, 10, 18, "#59636f", "building"), box(23, 4, -20, 15, 8, 14, "#6d5f55", "building"),
-        box(-22, 4, 20, 16, 8, 15, "#516a58", "building"), box(23, 5.5, 20, 17, 11, 17, "#62606d", "building"),
+        box(-23, 5, -18, 14, 10, 18, "#59636f", "building"),
+        box(23, 5.5, 20, 17, 11, 17, "#62606d", "building"),
         box(0, 2.25, 0, 10, 4.5, 10, "#4d565f", "cover"), box(-11, 1.5, -5, 5, 3, 5, "#2f80ed", "cover"),
         box(12, 1.5, 7, 5, 3, 5, "#8e44ad", "cover"), box(3, 1.25, -17, 4, 2.5, 8, "#b87333", "crate"),
         box(-3, 1.25, 17, 4, 2.5, 8, "#b87333", "crate"), box(-12, 2.1, 9, 2, 4.2, 13, "#3f444a", "wall"),
@@ -114,6 +114,7 @@ def voxel_world():
         "hardpoints": [(-15, 5, -15), (16, 5, 14), (0, 5, -6), (0, 5, 21)],
         "bounds": [-200000, 200000, -200000, 200000], "ground": "#75a84b", "sky": "#7ec8ff", "fog": "#9ed6ff",
         "build": True, "day_night": True, "mobs": True, "grid": 2, "infinite": True,
+        "biomes": ["plains", "forest", "taiga", "snowy_plains", "desert", "savanna", "jungle", "swamp", "badlands", "meadow", "mountains"],
     }
 
 
@@ -171,22 +172,22 @@ def clan_world():
     # instead of being arranged on a straight progression line.
     village_layout = [
         {"th": 1,  "x": 0,    "z": 0},
-        {"th": 2,  "x": -118, "z": -62},
-        {"th": 3,  "x": 126,  "z": 46},
-        {"th": 4,  "x": -58,  "z": -168},
-        {"th": 5,  "x": 92,   "z": -186},
-        {"th": 6,  "x": -184, "z": 112},
-        {"th": 7,  "x": 198,  "z": 132},
-        {"th": 8,  "x": -248, "z": -42},
-        {"th": 9,  "x": 258,  "z": -118},
-        {"th": 10, "x": -126, "z": 236},
-        {"th": 11, "x": 136,  "z": 258},
-        {"th": 12, "x": -302, "z": 188},
-        {"th": 13, "x": 318,  "z": 202},
-        {"th": 14, "x": -332, "z": -206},
-        {"th": 15, "x": 348,  "z": -246},
-        {"th": 16, "x": -46,  "z": -338},
-        {"th": 17, "x": 72,   "z": 362},
+        {"th": 2,  "x": -58,  "z": -38},
+        {"th": 3,  "x": 62,   "z": -42},
+        {"th": 4,  "x": -62,  "z": 44},
+        {"th": 5,  "x": 66,   "z": 46},
+        {"th": 6,  "x": -118, "z": -2},
+        {"th": 7,  "x": 124,  "z": 6},
+        {"th": 8,  "x": -18,  "z": -92},
+        {"th": 9,  "x": 24,   "z": 98},
+        {"th": 10, "x": -118, "z": 82},
+        {"th": 11, "x": 122,  "z": -88},
+        {"th": 12, "x": -176, "z": 34},
+        {"th": 13, "x": 180,  "z": -26},
+        {"th": 14, "x": -72,  "z": 142},
+        {"th": 15, "x": 80,   "z": 150},
+        {"th": 16, "x": -170, "z": -88},
+        {"th": 17, "x": 156,  "z": 118},
     ]
     boxes = []
 
@@ -246,12 +247,19 @@ BLOCK_TYPES = {"dirt", "stone", "wood", "glass", "redstone", "lamp", "lever"}
 BLOCK_COLORS = {
     "grass": "#6fb24c", "dirt": "#8a5a32", "stone": "#777777", "wood": "#9b6b3f", "glass": "#9ed7e5",
     "redstone": "#8f1d1d", "lamp": "#d7a632", "lever": "#74604b",
+    "leaves": "#3f8d35", "spruce": "#60452f", "spruce_leaves": "#315f39", "acacia": "#a85d32", "acacia_leaves": "#6b873a",
+    "jungle_wood": "#795634", "jungle_leaves": "#2e8b3f", "sand": "#d9c681", "sandstone": "#c9b26f", "snow": "#f2f6f8",
+    "ice": "#91c9e8", "red_sand": "#b75e36", "terracotta": "#a9573b", "podzol": "#72523a", "cobble": "#686868", "planks": "#b58a56",
+    "bedrock": "#343434",
 }
 VOXEL_GRID = 2
 VOXEL_CHUNK_CELLS = 8
 VOXEL_CHUNK_RADIUS = 1
-VOXEL_MIN_Y = -15
+VOXEL_STREAM_RADIUS = 60
+VOXEL_MIN_Y = -7
 VOXEL_MAX_Y = 31
+VOXEL_TERRAIN_TYPES = {"grass", "dirt", "stone", "sand", "sandstone", "snow", "red_sand", "terracotta", "podzol", "bedrock"}
+VILLAGE_BIOMES = {"plains", "savanna", "taiga", "meadow", "snowy_plains", "desert"}
 
 
 def uid(n: int = 8) -> str:
@@ -317,6 +325,64 @@ def grid_round(v: float, grid: int = 2) -> int:
 
 def chunk_coord(v: float, span: int) -> int:
     return math.floor(v / span)
+
+
+def voxel_biome_at(x: float, z: float) -> str:
+    """Deterministic broad biomes using low-frequency temperature/moisture fields."""
+    temp = math.sin(x * 0.0082) + 0.62 * math.cos(z * 0.0067) + 0.24 * math.sin((x + z) * 0.0033)
+    wet = math.cos(x * 0.0071 - 0.8) + 0.58 * math.sin(z * 0.0086) + 0.20 * math.cos((x - z) * 0.0038)
+    odd = math.sin(x * 0.0047 + z * 0.0052) + 0.55 * math.cos(x * 0.0029 - z * 0.0041)
+    ridge = math.sin(x * 0.0031) + math.cos(z * 0.0036) + 0.4 * math.sin((x - z) * 0.0022)
+    if ridge > 1.45:
+        return "mountains"
+    if temp < -0.85:
+        return "snowy_plains"
+    if temp < -0.42:
+        return "taiga"
+    if temp > 0.95 and wet < -0.30:
+        return "desert"
+    if temp > 0.72 and wet < 0.22:
+        return "savanna"
+    if temp > 0.65 and wet > 0.82:
+        return "jungle"
+    if wet > 1.08:
+        return "swamp"
+    if temp > 0.48 and odd < -1.05:
+        return "badlands"
+    if ridge > 0.82 and wet > -0.25:
+        return "meadow"
+    if wet > 0.28:
+        return "forest"
+    return "plains"
+
+
+def voxel_surface_layers(x: float, z: float, biome: Optional[str] = None) -> int:
+    biome = biome or voxel_biome_at(x, z)
+    broad = 0.75 * math.sin((x + 17) * 0.023) + 0.62 * math.cos((z - 11) * 0.021) + 0.34 * math.sin((x + z) * 0.012)
+    detail = 0.33 * math.sin((x - z) * 0.071) + 0.22 * math.cos((x + z) * 0.059)
+    amp = {
+        "plains": 0.55, "forest": 0.9, "taiga": 1.05, "snowy_plains": 0.65, "desert": 0.65,
+        "savanna": 0.9, "jungle": 1.15, "swamp": 0.30, "badlands": 1.15, "meadow": 1.25, "mountains": 2.7,
+    }[biome]
+    base = 4.0 + broad * amp + detail * min(1.1, amp)
+    if biome == "mountains":
+        base += 2.4 + abs(math.sin(x * .018) + math.cos(z * .016)) * 1.6
+    if biome == "swamp":
+        base -= 0.6
+    return int(clamp(round(base), 2, 10))
+
+
+def voxel_surface_block(biome: str) -> str:
+    return {
+        "desert": "sand", "snowy_plains": "snow", "badlands": "red_sand", "taiga": "podzol",
+        "mountains": "snow", "swamp": "grass", "savanna": "grass", "jungle": "grass", "forest": "grass",
+        "meadow": "grass", "plains": "grass",
+    }.get(biome, "grass")
+
+
+def voxel_hash(cx: int, cz: int, salt: int = 0) -> float:
+    v = math.sin(cx * 127.1 + cz * 311.7 + salt * 74.7) * 43758.5453
+    return v - math.floor(v)
 
 
 @dataclass
@@ -456,20 +522,20 @@ class Room:
                     created = True
         return created
 
-    def voxel_surface_spawn(self, sx: int, sz: int, search_radius: int = 3):
+    def voxel_surface_spawn(self, sx: int, sz: int, search_radius: int = 4):
         self.ensure_voxel_area(sx, sz, VOXEL_CHUNK_RADIUS)
         best = None
         for dz in range(-search_radius, search_radius + 1):
             for dx in range(-search_radius, search_radius + 1):
                 x = grid_round(sx + dx * VOXEL_GRID, VOXEL_GRID)
                 z = grid_round(sz + dz * VOXEL_GRID, VOXEL_GRID)
-                col = [b for b in self.blocks.values() if b.x == x and b.z == z and b.type != "lever"]
+                col = [b for b in self.blocks.values() if b.x == x and b.z == z and b.type in VOXEL_TERRAIN_TYPES and b.type != "bedrock"]
                 if not col:
                     continue
                 top = max(col, key=lambda b: b.y)
                 top_surface = top.y + 1
                 penalty = abs(dx) + abs(dz)
-                score = top_surface - penalty * 0.35
+                score = top_surface - penalty * 0.18
                 if best is None or score > best[0]:
                     best = (score, x, top_surface, z)
         if best is None:
@@ -477,45 +543,102 @@ class Room:
         return best[1], best[2], best[3]
 
     def generate_voxel_chunk(self, cx: int, cz: int):
+        column_tops = {}
         for lx in range(VOXEL_CHUNK_CELLS):
             for lz in range(VOXEL_CHUNK_CELLS):
                 wx = (cx * VOXEL_CHUNK_CELLS + lx) * VOXEL_GRID
                 wz = (cz * VOXEL_CHUNK_CELLS + lz) * VOXEL_GRID
-                n = (
-                    math.sin((wx + 11) * 0.11)
-                    + math.cos((wz - 7) * 0.10)
-                    + 0.7 * math.sin((wx + wz) * 0.045)
-                    + 0.35 * math.cos((wx - wz) * 0.06)
-                )
-                layers = int(clamp(round(4 + n * 1.3), 2, 7))
+                biome = voxel_biome_at(wx, wz)
+                layers = voxel_surface_layers(wx, wz, biome)
                 bottom_index = -4
                 for idx in range(bottom_index, layers):
                     y = 1 + idx * 2
-                    cave_score = math.sin(wx * 0.18 + y * 0.55) + math.cos(wz * 0.22 - y * 0.41)
-                    if idx < layers - 1 and idx > bottom_index and cave_score > 1.1:
-                        continue
                     key = f"{wx}:{y}:{wz}"
                     if key in self.blocks:
                         continue
-                    typ = "stone" if idx < layers - 2 else "dirt"
-                    if idx == layers - 1:
-                        typ = "grass"
+                    if idx == bottom_index:
+                        typ = "bedrock"
+                    else:
+                        cave_score = math.sin(wx * 0.18 + y * 0.55) + math.cos(wz * 0.22 - y * 0.41)
+                        if idx < layers - 1 and idx > bottom_index + 1 and cave_score > 1.25:
+                            continue
+                        if idx == layers - 1:
+                            typ = voxel_surface_block(biome)
+                        elif biome == "desert" and idx >= layers - 3:
+                            typ = "sandstone"
+                        elif biome == "badlands" and idx >= layers - 4:
+                            typ = "terracotta"
+                        elif idx >= layers - 2:
+                            typ = "dirt"
+                        else:
+                            typ = "stone"
                     self.blocks[key] = Block(key, wx, y, wz, typ, "world")
-                spawn_clear = any(abs(wx - sp[0]) <= 4 and abs(wz - sp[2]) <= 4 for sp in self.world_cfg["spawns"]) or (abs(wx) <= 8 and abs(wz) <= 8)
-                if spawn_clear:
-                    for y in range(7, 15, 2):
-                        self.blocks.pop(f"{wx}:{y}:{wz}", None)
-                tree_score = math.sin(wx * 0.27) + math.cos(wz * 0.23)
-                if layers >= 4 and not spawn_clear and abs(wx) + abs(wz) > 8 and tree_score > 1.25:
-                    top = 1 + (layers - 1) * 2
-                    for oy in (2, 4, 6):
-                        self.add_block(wx, top + oy, wz, "wood", "world")
-                    leaf_y = top + 8
-                    for dx2 in (-2, 0, 2):
-                        for dz2 in (-2, 0, 2):
-                            if abs(dx2) + abs(dz2) <= 2:
-                                self.add_block(wx + dx2, leaf_y, wz + dz2, "grass", "world")
-                    self.add_block(wx, leaf_y + 2, wz, "grass", "world")
+                top = 1 + (layers - 1) * 2
+                column_tops[(wx, wz)] = (top, biome)
+
+        # Biome vegetation. Leaves have their own block type so spawn selection never mistakes the canopy for terrain.
+        for (wx, wz), (top, biome) in column_tops.items():
+            spawn_clear = any(abs(wx - sp[0]) <= 5 and abs(wz - sp[2]) <= 5 for sp in self.world_cfg["spawns"]) or (abs(wx) <= 7 and abs(wz) <= 7)
+            if spawn_clear:
+                continue
+            tree_score = voxel_hash(wx // 2, wz // 2, 4)
+            threshold = {"forest": .77, "taiga": .80, "jungle": .68, "savanna": .88, "plains": .94, "meadow": .95, "swamp": .90}.get(biome, 2.0)
+            if tree_score < threshold:
+                continue
+            trunk = "wood"
+            leaves = "leaves"
+            height = 3
+            if biome == "taiga":
+                trunk, leaves, height = "spruce", "spruce_leaves", 4
+            elif biome == "savanna":
+                trunk, leaves, height = "acacia", "acacia_leaves", 3
+            elif biome == "jungle":
+                trunk, leaves, height = "jungle_wood", "jungle_leaves", 5
+            for h in range(1, height + 1):
+                self.add_block(wx, top + h * 2, wz, trunk, "world")
+            leaf_y = top + (height + 1) * 2
+            if biome == "taiga":
+                for dy, radius in ((0, 2), (2, 1), (4, 0)):
+                    for dx in range(-radius, radius + 1):
+                        for dz in range(-radius, radius + 1):
+                            self.add_block(wx + dx * 2, leaf_y + dy, wz + dz * 2, leaves, "world")
+            elif biome == "savanna":
+                for dx in (-2, 0, 2):
+                    for dz in (-2, 0, 2):
+                        self.add_block(wx + dx, leaf_y, wz + dz, leaves, "world")
+            else:
+                for dx in (-2, 0, 2):
+                    for dz in (-2, 0, 2):
+                        if abs(dx) + abs(dz) <= 4:
+                            self.add_block(wx + dx, leaf_y, wz + dz, leaves, "world")
+                self.add_block(wx, leaf_y + 2, wz, leaves, "world")
+
+        # Small, rare biome-appropriate villages. Village architecture follows the biome family:
+        # oak/cobble in plains/meadow, sandstone in desert, spruce in taiga/snow, acacia in savanna.
+        center_x = (cx * VOXEL_CHUNK_CELLS + VOXEL_CHUNK_CELLS // 2) * VOXEL_GRID
+        center_z = (cz * VOXEL_CHUNK_CELLS + VOXEL_CHUNK_CELLS // 2) * VOXEL_GRID
+        center_biome = voxel_biome_at(center_x, center_z)
+        if center_biome in VILLAGE_BIOMES and voxel_hash(cx, cz, 91) > .965 and abs(center_x) + abs(center_z) > 35:
+            self.generate_voxel_village(center_x, center_z, center_biome)
+
+    def generate_voxel_village(self, cx: int, cz: int, biome: str):
+        base_y = 1 + (voxel_surface_layers(cx, cz, biome) - 1) * 2
+        wall_type = "sandstone" if biome == "desert" else "spruce" if biome in {"taiga", "snowy_plains"} else "acacia" if biome == "savanna" else "planks"
+        roof_type = "sandstone" if biome == "desert" else "spruce" if biome in {"taiga", "snowy_plains"} else "acacia" if biome == "savanna" else "wood"
+        for hx, hz in ((cx - 5, cz - 4), (cx + 5, cz + 4)):
+            hbase = 1 + (voxel_surface_layers(hx, hz, voxel_biome_at(hx, hz)) - 1) * 2
+            for dx in (-2, 0, 2):
+                for dz in (-2, 0, 2):
+                    if abs(dx) == 2 or abs(dz) == 2:
+                        self.add_block(grid_round(hx + dx), hbase + 2, grid_round(hz + dz), wall_type, "world")
+                        self.add_block(grid_round(hx + dx), hbase + 4, grid_round(hz + dz), wall_type, "world")
+                    self.add_block(grid_round(hx + dx), hbase + 6, grid_round(hz + dz), roof_type, "world")
+            # door opening
+            self.blocks.pop(f"{grid_round(hx)}:{hbase + 2}:{grid_round(hz - 2)}", None)
+            self.blocks.pop(f"{grid_round(hx)}:{hbase + 4}:{grid_round(hz - 2)}", None)
+        # well / center marker
+        for dx, dz in ((-2, 0), (2, 0), (0, -2), (0, 2)):
+            self.add_block(cx + dx, base_y + 2, cz + dz, "cobble", "world")
 
     def seed_mobs(self):
         for kind, pos in [
@@ -578,8 +701,42 @@ class Room:
         for pid in dead:
             self.sockets.pop(pid, None)
 
-    async def emit_blocks(self):
-        await self.emit({"t": "blocks", "blocks": [b.public() for b in self.blocks.values()]})
+    def block_exposed(self, b: Block) -> bool:
+        for dx, dy, dz in ((2, 0, 0), (-2, 0, 0), (0, 2, 0), (0, -2, 0), (0, 0, 2), (0, 0, -2)):
+            if f"{b.x + dx}:{b.y + dy}:{b.z + dz}" not in self.blocks:
+                return True
+        return False
+
+    def blocks_near(self, x: float, z: float, radius: float = VOXEL_STREAM_RADIUS):
+        # Send a complete collision/mining core near the player, but only exposed
+        # surface blocks farther out. This keeps Minecraft-style horizons visible
+        # without shipping thousands of hidden underground cubes every update.
+        r2 = radius * radius
+        core2 = 12 * 12
+        out = []
+        for b in self.blocks.values():
+            d2 = (b.x - x) ** 2 + (b.z - z) ** 2
+            if d2 > r2:
+                continue
+            surface_y = 1 + (voxel_surface_layers(b.x, b.z) - 1) * 2
+            if d2 <= core2 or b.y >= surface_y - 4 or b.type in {"redstone", "lamp", "lever", "glass"}:
+                out.append(b.public())
+        return out
+
+    async def emit_blocks(self, only: Optional[str] = None):
+        dead = []
+        for pid, ws in list(self.sockets.items()):
+            if only is not None and pid != only:
+                continue
+            player = self.players.get(pid)
+            if not player:
+                continue
+            try:
+                await ws.send_json({"t": "blocks", "blocks": self.blocks_near(player.x, player.z)})
+            except Exception:
+                dead.append(pid)
+        for pid in dead:
+            self.sockets.pop(pid, None)
 
     def recompute_power(self):
         # Simple grid circuit: powered lever spreads through touching redstone blocks;
@@ -740,7 +897,7 @@ async def terms():
 async def health():
     return {
         "ok": True,
-        "version": "2.4.0",
+        "version": "2.5.0",
         "rooms": len(rooms),
         "players": sum(len(r.players) for r in rooms.values()),
     }
@@ -753,7 +910,7 @@ async def config():
 
 @app.get("/api/site-config")
 async def site_config():
-    return JSONResponse({"ads": ad_config(), "version": "2.4.0", "brand": "Blockfront Worlds"})
+    return JSONResponse({"ads": ad_config(), "version": "2.5.0", "brand": "Blockfront Worlds"})
 
 
 @app.get("/api/rooms")
@@ -803,7 +960,7 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
     await ws.send_json({
         "t": "welcome", "id": pid, "room": room.code, "mode": room.mode, "world": room.world,
         "player": p.public(), "hardpoint": room.hardpoint_index,
-        "blocks": [b.public() for b in room.blocks.values()] if room.world == "voxel" else [],
+        "blocks": room.blocks_near(p.x, p.z) if room.world == "voxel" else [],
     })
     if room.task is None or room.task.done():
         room.task = asyncio.create_task(room.loop())
@@ -821,17 +978,31 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                     minx, maxx, minz, maxz = room.world_cfg["bounds"]
                     p.x, p.z = clamp(nx, minx, maxx), clamp(nz, minz, maxz)
                     if room.world == "voxel":
-                        p.y = clamp(ny, VOXEL_MIN_Y, 40)
+                        p.y = clamp(ny, VOXEL_MIN_Y - 3, 48)
                         generated = room.ensure_voxel_area(p.x, p.z, VOXEL_CHUNK_RADIUS)
+                        if p.y < VOXEL_MIN_Y - 1:
+                            sx, sy, sz = room.voxel_surface_spawn(int(p.x), int(p.z), 2)
+                            p.x, p.y, p.z = sx, sy, sz
+                            await ws.send_json({"t": "respawn", "player": p.public()})
                     else:
                         p.y = clamp(ny, 0, 24)
                 if generated:
-                    await room.emit_blocks()
+                    await room.emit_blocks(only=pid)
                 p.yaw = float(msg.get("yaw", p.yaw))
                 p.pitch = clamp(float(msg.get("pitch", p.pitch)), -1.55, 1.55)
                 p.vx = clamp(float(msg.get("vx", 0)), -30, 30)
                 p.vy = clamp(float(msg.get("vy", 0)), -30, 30)
                 p.vz = clamp(float(msg.get("vz", 0)), -30, 30)
+
+            elif t == "voxel_prefetch" and p.alive and room.world == "voxel":
+                try:
+                    tx = float(msg.get("x", p.x))
+                    tz = float(msg.get("z", p.z))
+                except (TypeError, ValueError):
+                    continue
+                if math.hypot(tx - p.x, tz - p.z) <= 45:
+                    room.ensure_voxel_area(tx, tz, VOXEL_CHUNK_RADIUS)
+                    await room.emit_blocks(only=pid)
 
             elif t == "class":
                 k = msg.get("klass")
@@ -870,6 +1041,8 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                 key = str(msg.get("key", ""))
                 b = room.blocks.get(key)
                 if not b:
+                    continue
+                if b.type == "bedrock":
                     continue
                 if math.dist((p.x, p.y + 3.0, p.z), (b.x, b.y, b.z)) > 8.0:
                     continue
