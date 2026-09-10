@@ -13,7 +13,6 @@ const VOXEL_RENDER_RADIUS=92;
 const VOXEL_HORIZON_RADIUS=190;
 const VOXEL_HORIZON_STEP=4;
 const CLAN_TH_COUNT=17;
-const CLAN_TH_SPACING=105;
 const MC_HOTBAR_SIZE=9;
 
 const state={
@@ -112,7 +111,7 @@ function buildGround(w){
     addPlane(worldGroup,140,140,0x2f965a,0,-.01,0);
     for(let i=-12;i<13;i++)addPlane(worldGroup,5.7,140,i%2?0x2b8d52:0x349d5f,i*5.7,.006,0);
   }else if(w.theme==='clan'){
-    // Nearby Town Hall villages provide their own grass patches and progression road.
+    // Nearby Town Hall villages provide their own grass patches; villages are scattered in two dimensions.
   }else{
     addPlane(worldGroup,180,180,w.ground,0,-.01,0);
   }
@@ -433,21 +432,39 @@ function clanDefenseSet(th){
   return ['firespitter','multigear','multiarcher','ricochet'];
 }
 function renderClanVillage(group,th,cx,cz){
-  const patch=new THREE.Mesh(new THREE.PlaneGeometry(82,82),new THREE.MeshToonMaterial({map:clanGrassTexture(),color:0xffffff}));patch.rotation.x=-Math.PI/2;patch.position.set(cx,-.025,cz);patch.receiveShadow=state.settings.quality;group.add(patch);
-  // progression road through the central gates
-  const road=new THREE.Mesh(new THREE.PlaneGeometry(9,CLAN_TH_SPACING),new THREE.MeshToonMaterial({color:0xd8c59d,side:THREE.DoubleSide}));road.rotation.x=-Math.PI/2;road.position.set(cx,.005,cz-CLAN_TH_SPACING/2);group.add(road);
+  const patch=new THREE.Mesh(new THREE.PlaneGeometry(82,82),new THREE.MeshToonMaterial({map:clanGrassTexture(),color:0xffffff}));
+  patch.rotation.x=-Math.PI/2;patch.position.set(cx,-.025,cz);patch.receiveShadow=state.settings.quality;group.add(patch);
+  // Local village paths only: no straight road linking all Town Halls.
+  const pathMat=new THREE.MeshToonMaterial({color:0xd8c59d,side:THREE.DoubleSide});
+  for(const [px,pz,w,h] of [[0,18,8,30],[0,-18,8,30],[18,0,30,8],[-18,0,30,8]]){
+    const path=new THREE.Mesh(new THREE.PlaneGeometry(w,h),pathMat);path.rotation.x=-Math.PI/2;path.position.set(cx+px,.005,cz+pz);group.add(path);
+  }
   clanWallRingLevel(group,cx,cz,th);clanTownHallLevel(group,cx,cz,th);
   const types=clanDefenseSet(th),pos=[[-13,-9],[13,9],[-13,9],[13,-9],[0,-15],[0,15]];
   types.forEach((type,i)=>clanDefenseModel(group,type,cx+pos[i][0],cz+pos[i][1],th));
   if(th>=5){clanGoldStorage(group,cx-8,cz+10);clanElixirStorage(group,cx+8,cz+10)}
   if(th>=8)clanCamp(group,cx-23,cz+6);
   for(let i=0;i<12;i++){const a=i/12*Math.PI*2,rr=30+((i*7+th*3)%8);clanTree(group,cx+Math.cos(a)*rr,cz+Math.sin(a)*rr,.65+((i+th)%4)*.08)}
-  const sign=makeLabel(`TH ${th}  •  ${th<9?'Early Village':th<12?'Medieval / Fire Era':th===12?'Electric Era':th===13?'Ice Era':th===14?'Jungle Era':th===15?'Magic Era':th===16?'Nature Era':'Justice Era'}`);sign.position.set(cx,3.1,cz+28);sign.scale.set(5.2,1.05,1);group.add(sign);
+  const sign=makeLabel(`TH ${th}  •  ${th<9?'Early Village':th<12?'Medieval / Fire Era':th===12?'Electric Era':th===13?'Ice Era':th===14?'Jungle Era':th===15?'Magic Era':th===16?'Nature Era':'Justice Era'}`);
+  sign.position.set(cx,3.1,cz+28);sign.scale.set(5.2,1.05,1);group.add(sign);
+}
+function clanVillageLayout(){
+  const layout=state.config?.worlds?.clan?.town_hall_layout||[];
+  return layout.map(v=>({th:Number(v.th),x:Number(v.x),z:Number(v.z)}));
 }
 function updateClanProgressionRender(force=false){
-  if(state.world!=='clan')return;const anchor=state.playing?state.pos:camera.position;
-  const current=clamp(Math.round(-anchor.z/CLAN_TH_SPACING)+1,1,CLAN_TH_COUNT),key=`th:${current}`;if(!force&&key===state.clanRenderKey)return;state.clanRenderKey=key;clearGroup(streamGroup);
-  const lo=Math.max(1,current-1),hi=Math.min(CLAN_TH_COUNT,current+2);for(let th=lo;th<=hi;th++)renderClanVillage(streamGroup,th,0,-(th-1)*CLAN_TH_SPACING);
+  if(state.world!=='clan')return;
+  const anchor=state.playing?state.pos:camera.position;
+  const layout=clanVillageLayout();if(!layout.length)return;
+  const ranked=[...layout].sort((a,b)=>{
+    const da=(anchor.x-a.x)**2+(anchor.z-a.z)**2;
+    const db=(anchor.x-b.x)**2+(anchor.z-b.z)**2;
+    return da-db;
+  });
+  const visible=ranked.slice(0,4);
+  const key=visible.map(v=>v.th).join(',');if(!force&&key===state.clanRenderKey)return;
+  state.clanRenderKey=key;clearGroup(streamGroup);
+  for(const v of visible)renderClanVillage(streamGroup,v.th,v.x,v.z);
 }
 
 function seeded01(a,b,c=0){const v=Math.sin(a*127.1+b*311.7+c*74.7)*43758.5453;return v-Math.floor(v)}

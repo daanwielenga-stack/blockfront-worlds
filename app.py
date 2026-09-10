@@ -21,7 +21,7 @@ STATIC = ROOT / "static"
 
 logger = logging.getLogger("blockfront")
 
-app = FastAPI(title="Blockfront Worlds", version="2.3.0")
+app = FastAPI(title="Blockfront Worlds", version="2.4.0")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
@@ -166,9 +166,28 @@ def battle_world():
 
 
 def clan_world():
-    # A long, walkable progression path. TH1 is at the spawn and every 105 world
-    # units farther north (negative Z) is the next Town Hall, ending at TH17.
-    spacing = 105
+    # Seventeen separate villages scattered across the Clash world. TH1 is the
+    # spawn village; the others are deliberately distributed in two dimensions
+    # instead of being arranged on a straight progression line.
+    village_layout = [
+        {"th": 1,  "x": 0,    "z": 0},
+        {"th": 2,  "x": -118, "z": -62},
+        {"th": 3,  "x": 126,  "z": 46},
+        {"th": 4,  "x": -58,  "z": -168},
+        {"th": 5,  "x": 92,   "z": -186},
+        {"th": 6,  "x": -184, "z": 112},
+        {"th": 7,  "x": 198,  "z": 132},
+        {"th": 8,  "x": -248, "z": -42},
+        {"th": 9,  "x": 258,  "z": -118},
+        {"th": 10, "x": -126, "z": 236},
+        {"th": 11, "x": 136,  "z": 258},
+        {"th": 12, "x": -302, "z": 188},
+        {"th": 13, "x": 318,  "z": 202},
+        {"th": 14, "x": -332, "z": -206},
+        {"th": 15, "x": 348,  "z": -246},
+        {"th": 16, "x": -46,  "z": -338},
+        {"th": 17, "x": 72,   "z": 362},
+    ]
     boxes = []
 
     def add_wall_gate_ring(cx: float, cz: float, th: int):
@@ -177,25 +196,22 @@ def clan_world():
         half = min(18 + th * 0.7, 29)
         wall_h = min(1.4 + th * 0.08, 2.8)
         gate = 6.5
-        # side walls
         boxes.append(box(cx-half, wall_h/2, cz, 2, wall_h, half*2, "#777777", f"th{th}_wall"))
         boxes.append(box(cx+half, wall_h/2, cz, 2, wall_h, half*2, "#777777", f"th{th}_wall"))
-        # front/back with a central opening so the progression road remains walkable
         seg = half-gate
         for zoff in (-half, half):
             boxes.append(box(cx-(gate+seg/2), wall_h/2, cz+zoff, seg, wall_h, 2, "#777777", f"th{th}_wall"))
             boxes.append(box(cx+(gate+seg/2), wall_h/2, cz+zoff, seg, wall_h, 2, "#777777", f"th{th}_wall"))
 
-    for th in range(1, 18):
-        cz = -(th-1) * spacing
+    for village in village_layout:
+        th = village["th"]
+        cx = village["x"]
+        cz = village["z"]
         hall_w = min(7.5 + th * .25, 11.5)
         hall_h = min(4.0 + th * .18, 7.2)
-        boxes.append(box(0, hall_h/2, cz, hall_w, hall_h, hall_w, "#a56a40", f"th{th}_townhall"))
-        add_wall_gate_ring(0, cz, th)
+        boxes.append(box(cx, hall_h/2, cz, hall_w, hall_h, hall_w, "#a56a40", f"th{th}_townhall"))
+        add_wall_gate_ring(cx, cz, th)
 
-        # Representative collision proxies for the defenses unlocked by this TH.
-        # The visible models are client-side and level-specific, but these solids
-        # keep firefights, jumping and line-of-sight consistent with what players see.
         defense_positions = [(-13, -9), (13, 9), (-13, 9), (13, -9), (0, -15), (0, 15)]
         unlocked = 1
         if th >= 2: unlocked += 1
@@ -203,25 +219,23 @@ def clan_world():
         if th >= 4: unlocked += 1
         if th >= 5: unlocked += 1
         if th >= 6: unlocked += 1
-        # Later villages keep four-to-six strong silhouettes rather than hundreds
-        # of colliders, which preserves browser performance.
         count = min(6, unlocked)
         for i in range(count):
             dx, dz = defense_positions[i]
             size = 3.2 if th < 9 else 4.0
             height = 2.8 if th < 9 else 4.2
-            boxes.append(box(dx, height/2, cz+dz, size, height, size, "#666666", f"th{th}_defense"))
+            boxes.append(box(cx+dx, height/2, cz+dz, size, height, size, "#666666", f"th{th}_defense"))
 
     return {
         "id": "clan", "name": "Clash of Clans", "short": "Clans", "theme": "clan",
-        "description": "Walk from Town Hall 1 through Town Hall 17, with each village using its own era, walls and signature defenses.",
+        "description": "Seventeen separate Town Hall villages are scattered across one large Clash world; each village uses its own level-specific Town Hall, walls and defenses.",
         "boxes": boxes,
-        # Players start just south of TH1 and naturally face north toward the progression route.
-        "spawns": [(-7, 0, 22), (7, 0, 22), (-11, 0, 16), (11, 0, 16), (-4, 0, 27), (4, 0, 27), (0, 0, 18), (0, 0, 30)],
-        "hardpoints": [(0, 0, 0), (0, 0, -8*spacing), (0, 0, -16*spacing)],
+        "spawns": [(-7, 0, 24), (7, 0, 24), (-11, 0, 18), (11, 0, 18), (-4, 0, 30), (4, 0, 30), (0, 0, 20), (0, 0, 34)],
+        "hardpoints": [(0, 0, 0), (-126, 0, 236), (318, 0, 202), (72, 0, 362)],
         "bounds": [-200000, 200000, -200000, 200000], "ground": "#90cf67", "sky": "#8fd4ff", "fog": "#ccecff",
         "build": False, "day_night": False, "mobs": False, "infinite": True,
-        "town_hall_count": 17, "town_hall_spacing": spacing,
+        "town_hall_count": 17,
+        "town_hall_layout": village_layout,
     }
 
 WORLDS = {w["id"]: w for w in (classic_world(), voxel_world(), stadium_world(), battle_world(), clan_world())}
@@ -726,7 +740,7 @@ async def terms():
 async def health():
     return {
         "ok": True,
-        "version": "2.3.0",
+        "version": "2.4.0",
         "rooms": len(rooms),
         "players": sum(len(r.players) for r in rooms.values()),
     }
@@ -739,7 +753,7 @@ async def config():
 
 @app.get("/api/site-config")
 async def site_config():
-    return JSONResponse({"ads": ad_config(), "version": "2.3.0", "brand": "Blockfront Worlds"})
+    return JSONResponse({"ads": ad_config(), "version": "2.4.0", "brand": "Blockfront Worlds"})
 
 
 @app.get("/api/rooms")

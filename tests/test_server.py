@@ -23,7 +23,7 @@ def test_health():
     assert r.status_code == 200
     body = r.json()
     assert body['ok'] is True
-    assert body['version'] == '2.3.0'
+    assert body['version'] == '2.4.0'
 
 
 def test_config_contains_five_worlds():
@@ -41,7 +41,11 @@ def test_config_contains_five_worlds():
     assert data['weapons']['Milan Gun']['damage'] == 0
     assert data['worlds']['clan']['name'] == 'Clash of Clans'
     assert data['worlds']['clan']['town_hall_count'] == 17
-    assert data['worlds']['clan']['town_hall_spacing'] == 105
+    layout = data['worlds']['clan']['town_hall_layout']
+    assert len(layout) == 17
+    assert layout[0] == {'th': 1, 'x': 0, 'z': 0}
+    assert len({v['x'] for v in layout}) > 8
+    assert len({v['z'] for v in layout}) > 8
     assert all(data['worlds'][wid]['infinite'] for wid in data['world_order'])
 
 
@@ -144,4 +148,10 @@ def test_clan_progression_geometry():
     tags = {b['tag'] for b in clan['boxes']}
     for th in (1, 5, 10, 17):
         assert f'th{th}_townhall' in tags
-    assert any(b['z'] < -1600 for b in clan['boxes'] if b['tag'] == 'th17_townhall')
+    layout = clan['town_hall_layout']
+    assert len(layout) == 17
+    coords = {(v['x'], v['z']) for v in layout}
+    assert len(coords) == 17
+    assert len({x for x, _ in coords}) > 8 and len({z for _, z in coords}) > 8
+    th17 = next(v for v in layout if v['th'] == 17)
+    assert th17['x'] != 0
