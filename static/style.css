@@ -88,3 +88,7 @@ a{color:inherit}
 @media(max-width:900px){
   .left-nav{display:none}.loadout-card{right:6px;top:63%;transform:none}.brand-wrap{top:31%;min-width:0;width:95%}.world-dock{bottom:114px;width:95vw}.world-chip{font-size:9px;padding:7px 3px}.bottom-actions{width:96%;flex-wrap:wrap;justify-content:center}.brand{font-size:50px}.subbrand{font-size:22px}.ad-shell{display:none!important}.score-row{grid-template-columns:30px 1fr 70px 50px 50px}}
 @media(max-width:600px){.world-quick-select{grid-template-columns:repeat(3,1fr)}.world-dock{bottom:130px}.loadout-card{display:none}.server-row{grid-template-columns:1fr 1fr auto}.server-row .optional{display:none}}
+
+
+.settings-section-title{margin-top:18px;padding-top:12px;border-top:1px solid #3d4148;font:900 12px 'Black Ops One',Impact,sans-serif;letter-spacing:1.4px;color:#f2c14e}
+.panel input[type=range]{accent-color:#f0b63f;cursor:pointer}.panel label b{float:right;color:#f2c14e;font-weight:900}.audio-hint{margin:5px 0 2px}
