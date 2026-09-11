@@ -140,8 +140,8 @@ function buildWorld(id){
   const w=state.config.worlds[id];if(!w)return;
   clearGroup(worldGroup);clearGroup(streamGroup);clearGroup(decorGroup);clearGroup(dynamicGroup);clearGroup(mobGroup);clearGroup(remoteGroup);state.dynamicBlocks.clear();state.mobs.clear();state.remote.clear();state.streamChunk='';state.voxelRenderKey='';state.voxelHorizonKey='';state.clanRenderKey='';state.clanCollisionBoxes=[];state.clanPatrols=[];state.mining=null;state.miningHeld=false;state.miningSentKey=null;state.musicNextAt=0;if(miningOverlay){scene.remove(miningOverlay);miningOverlay=null}guineaPig=null;
   renderer.shadowMap.enabled=state.settings.quality&&id!=='clan'&&id!=='voxel';sun.castShadow=renderer.shadowMap.enabled;
-  const ratioCap=id==='voxel'?1.0:id==='clan'?1.08:(state.settings.quality?1.45:1.05);renderer.setPixelRatio(Math.min(devicePixelRatio,ratioCap));
-  scene.background=color(w.sky);scene.fog=new THREE.Fog(color(w.fog),id==='voxel'?190:58,id==='voxel'?560:id==='clan'?300:id==='stadium'?145:125);hemi.intensity=id==='clan'?2.45:2;sun.intensity=id==='clan'?1.5:1.25;moonLight.intensity=0;stormRing=null;skySun=skyMoon=stars=null;
+  const ratioCap=id==='voxel'?1.0:id==='clan'?.92:(state.settings.quality?1.45:1.05);renderer.setPixelRatio(Math.min(devicePixelRatio,ratioCap));
+  scene.background=color(w.sky);scene.fog=new THREE.Fog(color(w.fog),id==='voxel'?190:id==='clan'?135:58,id==='voxel'?560:id==='clan'?455:id==='stadium'?145:125);hemi.intensity=id==='clan'?2.45:2;sun.intensity=id==='clan'?1.5:1.25;moonLight.intensity=0;stormRing=null;skySun=skyMoon=stars=null;
   buildGround(w);for(const b of w.boxes)addStyledWorldBox(w,b);buildDecor(w);state.currentBoxes=[...w.boxes];
   // Reset world-specific held-item state before rebuilding the first-person model.
   state.buildMode=false;if(id==='voxel')state.mcHotbar=0;
@@ -171,7 +171,7 @@ function buildGround(w){
     addPlane(worldGroup,140,140,0x2f965a,0,-.01,0);
     for(let i=-12;i<13;i++)addPlane(worldGroup,5.7,140,i%2?0x2b8d52:0x349d5f,i*5.7,.006,0);
   }else if(w.theme==='clan'){
-    const ground=new THREE.Mesh(new THREE.PlaneGeometry(420,420),new THREE.MeshStandardMaterial({map:clanGrassTexture(),color:0xffffff,roughness:.95,metalness:0}));ground.rotation.x=-Math.PI/2;ground.position.y=-.035;ground.receiveShadow=false;worldGroup.add(ground);
+    const ground=new THREE.Mesh(new THREE.PlaneGeometry(540,540),new THREE.MeshStandardMaterial({map:clanGrassTexture(),color:0xffffff,roughness:.95,metalness:0}));ground.rotation.x=-Math.PI/2;ground.position.y=-.035;ground.receiveShadow=false;worldGroup.add(ground);
   }else{
     addPlane(worldGroup,180,180,w.ground,0,-.01,0);
   }
@@ -606,16 +606,50 @@ function renderClanVillage(group,th,cx,cz){
 }
 function renderClanVillageLOD(group,th,cx,cz){
   const t=clanTheme(th),g=new THREE.Group();g.position.set(cx,0,cz);group.add(g);
-  clanBox(g,0,1.45,0,5.0,2.9,4.8,t.body);clanRoof(g,0,3.55,0,3.5,1.7,t.roof);
-  const ring=new THREE.Mesh(new THREE.RingGeometry(18,18.32,48),new THREE.MeshBasicMaterial({color:t.wall,side:THREE.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.03;g.add(ring);
+  // Medium-distance village: still cheap, but visually reads as a real base rather
+  // than just a Town Hall floating on grass.
+  const bodyMat=new THREE.MeshBasicMaterial({color:t.body}),roofMat=new THREE.MeshBasicMaterial({color:t.roof}),wallMat=new THREE.MeshBasicMaterial({color:t.wall});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(5.0,2.9,4.8),bodyMat);body.position.y=1.45;g.add(body);
+  const roof=new THREE.Mesh(new THREE.ConeGeometry(3.5,1.7,4),roofMat);roof.position.y=3.55;roof.rotation.y=Math.PI/4;g.add(roof);
+  const wallCount=20,wallGeo=new THREE.BoxGeometry(1.15,1.0,1.15),walls=new THREE.InstancedMesh(wallGeo,wallMat,wallCount),wm=new THREE.Matrix4();
+  for(let i=0;i<wallCount;i++){const [wx,wz]=squarePerimeterPoint(14,i/wallCount);wm.makeTranslation(wx,.5,wz);walls.setMatrixAt(i,wm)}walls.instanceMatrix.needsUpdate=true;g.add(walls);
+  const defenseCount=Math.min(7,Math.max(2,Math.ceil(clanDefenseEntries(th).length/7))),defGeo=new THREE.CylinderGeometry(.65,.9,2.5,7),defs=new THREE.InstancedMesh(defGeo,new THREE.MeshBasicMaterial({color:t.accent}),defenseCount),dm=new THREE.Matrix4();
+  for(let i=0;i<defenseCount;i++){const a=i/defenseCount*Math.PI*2+.35,r=8.5+(i%2)*2;dm.makeTranslation(Math.cos(a)*r,1.25,Math.sin(a)*r);defs.setMatrixAt(i,dm)}defs.instanceMatrix.needsUpdate=true;g.add(defs);
   const label=makeLabel(`TH ${th}`);label.position.set(0,5.3,0);label.scale.set(2.4,.6,1);g.add(label);
+}
+function renderClanFarVillages(group,villages){
+  if(!villages.length)return;
+  // All remaining Town Hall villages are represented immediately using five
+  // instanced batches.  This keeps distant buildings visible while adding only
+  // a handful of draw calls, regardless of how many villages are on-screen.
+  const bodyGeo=new THREE.BoxGeometry(1,1,1),roofGeo=new THREE.ConeGeometry(1,1,4),wallGeo=new THREE.BoxGeometry(1,1,1),defGeo=new THREE.CylinderGeometry(.58,.82,1,6),storeGeo=new THREE.SphereGeometry(1,8,6);
+  const body=new THREE.InstancedMesh(bodyGeo,new THREE.MeshBasicMaterial({color:0xffffff}),villages.length);
+  const roof=new THREE.InstancedMesh(roofGeo,new THREE.MeshBasicMaterial({color:0xffffff}),villages.length);
+  const wallPerVillage=12,wallTotal=villages.length*wallPerVillage,walls=new THREE.InstancedMesh(wallGeo,new THREE.MeshBasicMaterial({color:0xffffff}),wallTotal);
+  const defCounts=villages.map(v=>Math.min(8,Math.max(2,Math.ceil(clanDefenseEntries(v.th).length/7)))),defTotal=defCounts.reduce((a,b)=>a+b,0),defs=new THREE.InstancedMesh(defGeo,new THREE.MeshBasicMaterial({color:0xffffff}),defTotal);
+  const storeCounts=villages.map(v=>v.th<3?1:2),storeTotal=storeCounts.reduce((a,b)=>a+b,0),stores=new THREE.InstancedMesh(storeGeo,new THREE.MeshBasicMaterial({color:0xffffff}),storeTotal);
+  const m=new THREE.Matrix4(),q=new THREE.Quaternion(),scale=new THREE.Vector3(),pos=new THREE.Vector3();let wi=0,di=0,si=0;
+  villages.forEach((v,i)=>{
+    const t=clanTheme(v.th),s=.78+Math.min(v.th,17)*.012;
+    m.compose(pos.set(v.x,1.25*s,v.z),q,scale.set(4.8*s,2.5*s,4.6*s));body.setMatrixAt(i,m);body.setColorAt(i,new THREE.Color(t.body));
+    q.setFromAxisAngle(new THREE.Vector3(0,1,0),Math.PI/4);m.compose(pos.set(v.x,3.35*s,v.z),q,scale.set(3.25*s,1.55*s,3.25*s));roof.setMatrixAt(i,m);roof.setColorAt(i,new THREE.Color(t.roof));q.identity();
+    const radius=11.5+Math.min(v.th,17)*.23;
+    for(let j=0;j<wallPerVillage;j++){const [dx,dz]=squarePerimeterPoint(radius,j/wallPerVillage);m.compose(pos.set(v.x+dx,.52,v.z+dz),q,scale.set(1.45,1.04,1.45));walls.setMatrixAt(wi,m);walls.setColorAt(wi,new THREE.Color(t.wall));wi++}
+    const dc=defCounts[i];for(let j=0;j<dc;j++){const a=j/dc*Math.PI*2+.41,r=6.8+(j%2)*2.1;m.compose(pos.set(v.x+Math.cos(a)*r,1.15,v.z+Math.sin(a)*r),q,scale.set(1.15,2.3,1.15));defs.setMatrixAt(di,m);defs.setColorAt(di,new THREE.Color(j%3===0?t.accent:t.dark));di++}
+    const sc=storeCounts[i];for(let j=0;j<sc;j++){const a=(j+.5)/sc*Math.PI*2+1.05,r=8.8;m.compose(pos.set(v.x+Math.cos(a)*r,1.35,v.z+Math.sin(a)*r),q,scale.set(1.35,1.05,1.35));stores.setMatrixAt(si,m);stores.setColorAt(si,new THREE.Color(j%2?0xd754e8:0xf1c537));si++}
+  });
+  for(const mesh of [body,roof,walls,defs,stores]){mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;mesh.frustumCulled=true;mesh.castShadow=false;mesh.receiveShadow=false;group.add(mesh)}
 }
 function clanVillageLayout(){const layout=state.config?.worlds?.clan?.town_hall_layout||[];return layout.map(v=>({th:Number(v.th),x:Number(v.x),z:Number(v.z)}))}
 function updateClanProgressionRender(force=false){
   if(state.world!=='clan')return;const anchor=state.playing?state.pos:camera.position,layout=clanVillageLayout();if(!layout.length)return;
   const ranked=[...layout].sort((a,b)=>((anchor.x-a.x)**2+(anchor.z-a.z)**2)-((anchor.x-b.x)**2+(anchor.z-b.z)**2));
-  const detailed=ranked[0],lod=ranked.slice(1,5),key=`${detailed.th}|${lod.map(v=>v.th).join(',')}`;if(!force&&key===state.clanRenderKey)return;
-  state.clanRenderKey=key;state.clanCollisionBoxes=[];state.clanPatrols=[];clearGroup(streamGroup);renderClanVillage(streamGroup,detailed.th,detailed.x,detailed.z);for(const v of lod)renderClanVillageLOD(streamGroup,v.th,v.x,v.z);if(renderer.compileAsync)renderer.compileAsync(scene,camera).catch(()=>{});
+  const detailed=ranked[0],mid=ranked.slice(1,3),far=ranked.slice(3),key=`${detailed.th}|${mid.map(v=>v.th).join(',')}`;if(!force&&key===state.clanRenderKey)return;
+  state.clanRenderKey=key;state.clanCollisionBoxes=[];state.clanPatrols=[];clearGroup(streamGroup);
+  renderClanFarVillages(streamGroup,far);
+  for(const v of mid)renderClanVillageLOD(streamGroup,v.th,v.x,v.z);
+  renderClanVillage(streamGroup,detailed.th,detailed.x,detailed.z);
+  if(renderer.compileAsync)renderer.compileAsync(scene,camera).catch(()=>{});
 }
 
 function seeded01(a,b,c=0){const v=Math.sin(a*127.1+b*311.7+c*74.7)*43758.5453;return v-Math.floor(v)}
@@ -753,7 +787,7 @@ function applySettings(){
   if($('#musicVolumeInput')){$('#musicVolumeInput').value=Math.round(state.settings.musicVolume*100);$('#musicVolumeVal').textContent=`${Math.round(state.settings.musicVolume*100)}%`}
   if($('#sfxVolumeInput')){$('#sfxVolumeInput').value=Math.round(state.settings.sfxVolume*100);$('#sfxVolumeVal').textContent=`${Math.round(state.settings.sfxVolume*100)}%`}
   $('#menuName').textContent=state.name.toUpperCase();
-  if(camera){camera.fov=state.settings.fov;camera.updateProjectionMatrix();const cap=state.world==='voxel'?1.0:state.world==='clan'?1.08:(state.settings.quality?1.45:1.05);renderer?.setPixelRatio(Math.min(devicePixelRatio,cap))}
+  if(camera){camera.fov=state.settings.fov;camera.updateProjectionMatrix();const cap=state.world==='voxel'?1.0:state.world==='clan'?.92:(state.settings.quality?1.45:1.05);renderer?.setPixelRatio(Math.min(devicePixelRatio,cap))}
 }
 function refreshAllUI(){refreshLoadout();refreshRoomUI();refreshWorldUI()}
 function refreshLoadout(){const c=state.config.classes[state.klass];$('#className').textContent=state.klass;$('#weaponName').textContent=state.weapon;$('#weaponHud').textContent=state.world==='voxel'?mcItemLabel(mcSelectedItem()):state.weapon;$('#loadoutCard').style.borderRightColor=(state.config.weapons?.[state.weapon]?.color||c.color)}
