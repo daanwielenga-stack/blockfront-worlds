@@ -327,3 +327,66 @@ def test_websocket_placement_stacks_past_occupied_target():
         assert placed is not None
         assert placed['block']['y'] > occupied.y
         assert placed['request_key'] == request_key
+
+
+def test_hide_seek_mode_and_bomhof_gun_registered():
+    data = client.get('/api/config').json()
+
+    assert 'HIDESEEK' in data['modes']
+
+    assert 'Bomhof Gun' in data['weapons']
+
+    assert (
+        data['weapons']['Bomhof Gun']['nuke']
+        is True
+    )
+
+    assert (
+        data['weapons']['Bomhof Gun']['mag']
+        == 1
+    )
+
+
+def test_hide_seek_assigns_exactly_one_seeker():
+    room = Room(
+        'HIDE1',
+        'HIDESEEK',
+        'classic'
+    )
+
+    players = [
+        Player(
+            id=x,
+            name=x,
+            klass='Triggerman',
+            team='Hider',
+            x=0,
+            y=0,
+            z=0
+        )
+        for x in ('a', 'b', 'c')
+    ]
+
+    room.players = {
+        p.id: p
+        for p in players
+    }
+
+    room.assign_hide_seek_roles()
+
+    assert sum(
+        p.team == 'Seeker'
+        for p in room.players.values()
+    ) == 1
+
+    assert sum(
+        p.team == 'Hider'
+        for p in room.players.values()
+    ) == 2
+
+    phase, hide_left = room.hide_seek_state(
+        room.started_at + 1
+    )
+
+    assert phase == 'HIDE'
+    assert hide_left > 0

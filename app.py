@@ -58,6 +58,18 @@ WEAPONS = {
     "Shotgun": {"damage": 16, "rpm": 115, "mag": 5, "reload": 1.70, "spread": 0.065, "range": 24, "pellets": 7, "head_multiplier": 1.25, "color": "#ff7b54"},
     "Machine Gun": {"damage": 22, "rpm": 720, "mag": 60, "reload": 2.20, "spread": 0.013, "range": 82, "head_multiplier": 1.4, "color": "#ef476f"},
     "Milan Gun": {"damage": 0, "rpm": 170, "mag": 12, "reload": 1.10, "spread": 0.010, "range": 55, "head_multiplier": 1.0, "nonlethal": True, "color": "#67d7ff"},
+    # BLOCKFRONT_HIDESEEK_BOMHOF_V1
+    "Bomhof Gun": {
+        "damage": 0,
+        "rpm": 5,
+        "mag": 1,
+        "reload": 8.0,
+        "spread": 0.0,
+        "range": 140,
+        "head_multiplier": 1.0,
+        "nuke": True,
+        "color": "#ff8a3d"
+    },
 }
 DEFAULT_WEAPON = "Assault Rifle"
 
@@ -246,7 +258,7 @@ def clan_world():
 
 WORLDS = {w["id"]: w for w in (classic_world(), voxel_world(), stadium_world(), battle_world(), clan_world())}
 WORLD_ORDER = ["classic", "voxel", "stadium", "battle", "clan"]
-MODES = {"FFA", "TDM", "HARDPOINT"}
+MODES = {"FFA", "TDM", "HARDPOINT", "HIDESEEK"}
 MAX_PLAYERS_PER_ROOM = int(os.getenv("MAX_PLAYERS_PER_ROOM", "16"))
 BLOCK_TYPES = {"dirt", "stone", "wood", "planks", "cobble", "sand", "sandstone", "red_sand", "terracotta", "glass", "redstone", "lamp", "lever", "crafting_table", "furnace", "chest"}
 BLOCK_COLORS = {
@@ -582,10 +594,21 @@ class Room:
     hardpoint_index: int = 0
     hardpoint_changed_at: float = field(default_factory=time.time)
     hardpoint_score_tick: float = field(default_factory=time.time)
+
+    hns_seeker_id: str = ""
+    hns_hide_seconds: float = 18.0
+    hns_seek_seconds: float = 180.0
+
     task: Optional[asyncio.Task] = None
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     def __post_init__(self):
+        if self.mode == "HIDESEEK":
+            self.match_length = (
+                self.hns_hide_seconds +
+                self.hns_seek_seconds
+            )
+
         if self.world == "voxel" and not self.blocks:
             self.seed_voxel_world()
             self.seed_mobs()
@@ -888,11 +911,61 @@ class Room:
         for b in self.blocks.values():
             yield b.box()
 
+    def assign_hide_seek_roles(self, rotate: bool = False):
+        if self.mode != "HIDESEEK" or not self.players:
+            return
+
+        ids = list(self.players.keys())
+
+        if rotate or self.hns_seeker_id not in self.players:
+            if (
+                rotate
+                and self.hns_seeker_id in ids
+                and len(ids) > 1
+            ):
+                current = ids.index(self.hns_seeker_id)
+                self.hns_seeker_id = ids[
+                    (current + 1) % len(ids)
+                ]
+            else:
+                self.hns_seeker_id = ids[0]
+
+        for pid, player in self.players.items():
+            player.team = (
+                "Seeker"
+                if pid == self.hns_seeker_id
+                else "Hider"
+            )
+
+    def hide_seek_state(self, now: Optional[float] = None):
+        now = time.time() if now is None else now
+
+        elapsed = max(
+            0.0,
+            now - self.started_at
+        )
+
+        hide_left = max(
+            0.0,
+            self.hns_hide_seconds - elapsed
+        )
+
+        return (
+            "HIDE" if hide_left > 0 else "SEEK",
+            hide_left
+        )
+
     def reset_match(self):
         self.started_at = time.time()
         self.team_scores = {"Alpha": 0, "Bravo": 0}
-        self.hardpoint_index = (self.hardpoint_index + 1) % len(self.world_cfg["hardpoints"])
+        self.hardpoint_index = (
+            self.hardpoint_index + 1
+        ) % len(self.world_cfg["hardpoints"])
         self.hardpoint_changed_at = time.time()
+
+        if self.mode == "HIDESEEK":
+            self.assign_hide_seek_roles(rotate=True)
+
         for p in self.players.values():
             p.score = p.kills = p.deaths = p.streak = 0
             self.spawn(p)
@@ -1070,12 +1143,110 @@ class Room:
             now = time.time()
             dt = min(0.1, now - last)
             last = now
-            if self.remaining <= 0:
-                winners = sorted(self.players.values(), key=lambda p: p.score, reverse=True)[:3]
-                await self.emit({"t": "match_end", "winners": [{"name": p.name, "score": p.score} for p in winners]})
+            if self.mode == "HIDESEEK":
+                self.assign_hide_seek_roles()
+
+                phase, _ = self.hide_seek_state(now)
+
+                hiders = [
+                    p
+                    for p in self.players.values()
+                    if p.team == "Hider"
+                ]
+
+                seeker = self.players.get(
+                    self.hns_seeker_id
+                )
+
+                ended = False
+                winners = []
+                reason = ""
+
+                if (
+                    len(self.players) >= 2
+                    and phase == "SEEK"
+                    and hiders
+                    and not any(p.alive for p in hiders)
+                ):
+                    winners = [seeker] if seeker else []
+                    reason = (
+                        "The seeker found every hider."
+                    )
+                    ended = True
+
+                elif self.remaining <= 0:
+                    winners = [
+                        p
+                        for p in hiders
+                        if p.alive
+                    ] or hiders
+
+                    reason = (
+                        "The hiders survived until time ran out."
+                    )
+                    ended = True
+
+                if ended:
+                    await self.emit({
+                        "t": "match_end",
+                        "reason": reason,
+                        "winners": [
+                            {
+                                "name": p.name,
+                                "score": p.score
+                            }
+                            for p in winners
+                            if p
+                        ],
+                    })
+
+                    self.reset_match()
+
+                    for pid, player in list(
+                        self.players.items()
+                    ):
+                        await self.emit(
+                            {
+                                "t": "respawn",
+                                "player": player.public()
+                            },
+                            only=pid
+                        )
+
+                    await asyncio.sleep(.15)
+                    continue
+
+            elif self.remaining <= 0:
+                winners = sorted(
+                    self.players.values(),
+                    key=lambda p: p.score,
+                    reverse=True
+                )[:3]
+
+                await self.emit({
+                    "t": "match_end",
+                    "winners": [
+                        {
+                            "name": p.name,
+                            "score": p.score
+                        }
+                        for p in winners
+                    ]
+                })
+
                 self.reset_match()
-                for pid, p in list(self.players.items()):
-                    await self.emit({"t": "respawn", "player": p.public()}, only=pid)
+
+                for pid, p in list(
+                    self.players.items()
+                ):
+                    await self.emit(
+                        {
+                            "t": "respawn",
+                            "player": p.public()
+                        },
+                        only=pid
+                    )
+
             if self.mode == "HARDPOINT":
                 if now - self.hardpoint_changed_at >= 40:
                     self.hardpoint_index = (self.hardpoint_index + 1) % len(self.world_cfg["hardpoints"])
@@ -1094,8 +1265,19 @@ class Room:
             snap = {
                 "t": "snapshot", "mode": self.mode, "world": self.world, "remaining": self.remaining,
                 "players": [p.public() for p in self.players.values()], "team_scores": self.team_scores,
-                "hardpoint": self.hardpoint_index, "world_time": self.world_time,
-                "mobs": [m.public() for m in self.mobs.values()] if self.world == "voxel" else [],
+                "hardpoint": self.hardpoint_index,
+                "world_time": self.world_time,
+
+                "hide_seek": {
+                    "phase": self.hide_seek_state(now)[0],
+                    "hide_left": self.hide_seek_state(now)[1],
+                    "seeker_id": self.hns_seeker_id,
+                } if self.mode == "HIDESEEK" else None,
+
+                "mobs": [
+                    m.public()
+                    for m in self.mobs.values()
+                ] if self.world == "voxel" else [],
             }
             await self.emit(snap)
             await asyncio.sleep(0.05)
@@ -1209,11 +1391,32 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
         await ws.close(code=1008)
         return
     pid = uid()
-    team = choose_team(room) if room.mode != "FFA" else "Solo"
+    team = (
+        "Hider"
+        if room.mode == "HIDESEEK"
+        else (
+            choose_team(room)
+            if room.mode != "FFA"
+            else "Solo"
+        )
+    )
     sx, sy, sz = random.choice(room.world_cfg["spawns"])
     p = Player(pid, name, klass, team, sx, sy, sz, weapon=weapon, hp=CLASSES[klass]["hp"])
     room.players[pid] = p
     room.sockets[pid] = ws
+
+    if room.mode == "HIDESEEK":
+        room.assign_hide_seek_roles()
+
+        # Start a fresh hide period when the second
+        # player enters and the game becomes playable.
+        if len(room.players) == 2:
+            room.started_at = time.time()
+
+        # The nuke would instantly destroy Hide & Seek.
+        if p.weapon == "Bomhof Gun":
+            p.weapon = DEFAULT_WEAPON
+
     room.spawn(p)
     # Make the first frame deterministic for clients: welcome always arrives
     # before snapshots/events from the room loop.
@@ -1231,7 +1434,37 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
             msg = await ws.receive_json()
             t = msg.get("t")
             if t == "state" and p.alive:
-                nx, ny, nz = float(msg.get("x", p.x)), float(msg.get("y", p.y)), float(msg.get("z", p.z))
+
+                if room.mode == "HIDESEEK":
+                    phase, _ = room.hide_seek_state()
+
+                    if (
+                        p.team == "Seeker"
+                        and phase == "HIDE"
+                    ):
+                        p.yaw = float(
+                            msg.get("yaw", p.yaw)
+                        )
+
+                        p.pitch = clamp(
+                            float(
+                                msg.get(
+                                    "pitch",
+                                    p.pitch
+                                )
+                            ),
+                            -1.55,
+                            1.55
+                        )
+
+                        p.vx = p.vy = p.vz = 0
+                        continue
+
+                nx, ny, nz = (
+                    float(msg.get("x", p.x)),
+                    float(msg.get("y", p.y)),
+                    float(msg.get("z", p.z))
+                )
                 dx, dz = nx - p.x, nz - p.z
                 generated = False
                 if math.hypot(dx, dz) <= 4.5:
@@ -1275,12 +1508,34 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
             elif t == "weapon":
                 selected = str(msg.get("weapon", DEFAULT_WEAPON))
                 if selected in WEAPONS:
+
+                    if (
+                        room.mode == "HIDESEEK"
+                        and selected == "Bomhof Gun"
+                    ):
+                        await ws.send_json({
+                            "t": "event",
+                            "kind": "weapon",
+                            "text": (
+                                "Bomhof Gun is disabled "
+                                "in Hide & Seek."
+                            )
+                        })
+                        continue
+
                     p.weapon = selected
                     await ws.send_json({"t": "weapon", "weapon": p.weapon})
                     await room.emit({"t": "event", "kind": "weapon", "text": f"{p.name} equipped {p.weapon}"})
 
             elif t == "respawn":
-                if not p.alive and time.time() >= p.respawn_at:
+
+                if room.mode == "HIDESEEK":
+                    continue
+
+                if (
+                    not p.alive
+                    and time.time() >= p.respawn_at
+                ):
                     room.spawn(p)
                     await ws.send_json({"t": "respawn", "player": p.public()})
 
@@ -1385,7 +1640,20 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                     await room.emit_blocks(radius=28)
 
             elif t == "fire" and p.alive:
-                cfg = WEAPONS.get(p.weapon, WEAPONS[DEFAULT_WEAPON])
+
+                if room.mode == "HIDESEEK":
+                    phase, _ = room.hide_seek_state()
+
+                    if (
+                        p.team != "Seeker"
+                        or phase != "SEEK"
+                    ):
+                        continue
+
+                cfg = WEAPONS.get(
+                    p.weapon,
+                    WEAPONS[DEFAULT_WEAPON]
+                )
                 now = time.time()
                 min_interval = 60.0 / cfg["rpm"]
                 if now - p.last_fire < min_interval * 0.72:
@@ -1393,8 +1661,79 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                 p.last_fire = now
                 origin = tuple(float(v) for v in msg.get("o", [p.x, p.y + 1.4, p.z])[:3])
                 direction = norm(tuple(float(v) for v in msg.get("d", [0, 0, -1])[:3]))
-                if math.dist(origin, (p.x, p.y + 1.4, p.z)) > 3.0:
+                if math.dist(
+                    origin,
+                    (p.x, p.y + 1.4, p.z)
+                ) > 3.0:
                     continue
+
+                if cfg.get("nuke"):
+
+                    if room.mode == "HIDESEEK":
+                        continue
+
+                    blast_at = [
+                        origin[0] + direction[0] * 28.0,
+                        max(
+                            1.0,
+                            origin[1] +
+                            direction[1] * 28.0
+                        ),
+                        origin[2] + direction[2] * 28.0,
+                    ]
+
+                    await room.emit({
+                        "t": "bomhof_nuke",
+                        "shooter": p.id,
+                        "name": p.name,
+                        "o": list(origin),
+                        "at": blast_at,
+                    })
+
+                    # Let the projectile visibly travel
+                    # before the server applies the blast.
+                    await asyncio.sleep(1.05)
+
+                    now_kill = time.time()
+
+                    for victim in list(
+                        room.players.values()
+                    ):
+                        if not victim.alive:
+                            continue
+
+                        victim.hp = 0
+                        victim.alive = False
+                        victim.deaths += 1
+                        victim.streak = 0
+                        victim.respawn_at = (
+                            now_kill + 1.35
+                        )
+
+                        if victim.id != p.id:
+                            p.kills += 1
+                            p.score += 100
+
+                        await room.emit({
+                            "t": "kill",
+                            "killer": p.name,
+                            "killer_id": p.id,
+                            "victim": victim.name,
+                            "victim_id": victim.id,
+                            "weapon": "Bomhof Gun",
+                            "streak": p.streak,
+                        })
+
+                    # Voxel mobs are wiped out as well.
+                    for mob in room.mobs.values():
+                        if mob.alive:
+                            mob.alive = False
+                            mob.respawn_at = (
+                                now_kill + 12.0
+                            )
+
+                    continue
+
                 if cfg.get("nonlethal"):
                     digit = random.choice(["6", "7"])
                     await room.emit({"t": "milan", "shooter": p.id, "name": p.name, "digit": digit, "o": list(origin), "d": list(direction)})
@@ -1510,6 +1849,16 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                         await room.emit({"t": "mob_kill", "killer": p.name, "kind": m.kind})
 
             elif t == "melee" and p.alive:
+
+                if room.mode == "HIDESEEK":
+                    phase, _ = room.hide_seek_state()
+
+                    if (
+                        p.team != "Seeker"
+                        or phase != "SEEK"
+                    ):
+                        continue
+
                 now = time.time()
                 if now - p.last_fire < .35:
                     continue
@@ -1561,8 +1910,27 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
         logger.exception("WebSocket client error in room=%s world=%s player=%s", room.code, room.world, name)
     finally:
         room.sockets.pop(pid, None)
+
+        was_seeker = (
+            room.hns_seeker_id == pid
+        )
+
         room.players.pop(pid, None)
-        await room.emit({"t": "event", "kind": "leave", "text": f"{name} left"})
+
+        if (
+            room.mode == "HIDESEEK"
+            and was_seeker
+            and room.players
+        ):
+            room.hns_seeker_id = ""
+            room.assign_hide_seek_roles()
+            room.started_at = time.time()
+
+        await room.emit({
+            "t": "event",
+            "kind": "leave",
+            "text": f"{name} left"
+        })
         if not room.sockets:
             await asyncio.sleep(.05)
             if not room.sockets:
