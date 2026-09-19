@@ -54,7 +54,7 @@ CLASSES = {
 # chosen independently from the loadout menu.
 WEAPONS = {
     "Assault Rifle": {"damage": 27, "rpm": 650, "mag": 30, "reload": 1.35, "spread": 0.006, "range": 85, "head_multiplier": 1.5, "color": "#f2c14e"},
-    "Sniper Rifle": {"damage": 105, "rpm": 55, "mag": 3, "reload": 1.65, "spread": 0.0015, "range": 150, "head_multiplier": 1.5, "color": "#9b8cff"},
+    "Sniper Rifle": {"damage": 105, "rpm": 55, "mag": 3, "reload": 1.65, "spread": 0.0015, "range": 150, "head_multiplier": 1.75, "color": "#9b8cff"},
     "Shotgun": {"damage": 16, "rpm": 115, "mag": 5, "reload": 1.70, "spread": 0.065, "range": 24, "pellets": 7, "head_multiplier": 1.25, "color": "#ff7b54"},
     "Machine Gun": {"damage": 22, "rpm": 720, "mag": 60, "reload": 2.20, "spread": 0.013, "range": 82, "head_multiplier": 1.4, "color": "#ef476f"},
     "Milan Gun": {"damage": 0, "rpm": 170, "mag": 12, "reload": 1.10, "spread": 0.010, "range": 55, "head_multiplier": 1.0, "nonlethal": True, "color": "#67d7ff"},
@@ -1400,7 +1400,8 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                     await room.emit({"t": "milan", "shooter": p.id, "name": p.name, "digit": digit, "o": list(origin), "d": list(direction)})
                     continue
                 pellets = int(cfg.get("pellets", 1))
-                player_hits: Dict[str, int] = {}
+                # BLOCKFRONT_HITFX_V1: aggregate damage plus whether any pellet was a headshot.
+                player_hits: Dict[str, dict] = {}
                 mob_hits: Dict[str, int] = {}
                 for _ in range(pellets):
                     d = direction
@@ -1442,15 +1443,48 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                             damage *= .78
                         amount = int(round(damage))
                         if kind == "player":
-                            player_hits[target.id] = player_hits.get(target.id, 0) + amount
+                            hit = player_hits.setdefault(
+                                target.id,
+                                {"damage": 0, "headshot": False},
+                            )
+                            hit["damage"] += amount
+                            hit["headshot"] = bool(hit["headshot"] or is_head)
                         else:
                             mob_hits[target.id] = mob_hits.get(target.id, 0) + amount
-                for qid, damage in player_hits.items():
+                for qid, hit_info in player_hits.items():
                     q = room.players.get(qid)
                     if not q or not q.alive:
                         continue
+
+                    damage = int(hit_info["damage"])
+                    headshot = bool(hit_info["headshot"])
+
                     q.hp -= damage
-                    await room.emit({"t": "hit", "attacker": p.id, "victim": q.id, "damage": damage, "hp": max(0, q.hp)}, only=p.id)
+
+                    await room.emit(
+                        {
+                            "t": "hit",
+                            "attacker": p.id,
+                            "victim": q.id,
+                            "damage": damage,
+                            "hp": max(0, q.hp),
+                            "headshot": headshot,
+                        },
+                        only=p.id,
+                    )
+
+                    await room.emit(
+                        {
+                            "t": "hurt",
+                            "attacker": p.id,
+                            "victim": q.id,
+                            "weapon": p.weapon,
+                            "damage": damage,
+                            "hp": max(0, q.hp),
+                            "headshot": headshot,
+                        },
+                        only=q.id,
+                    )
                     if q.hp <= 0:
                         q.hp = 0
                         q.alive = False

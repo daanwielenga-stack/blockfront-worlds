@@ -30,7 +30,7 @@ const state={
   name:localStorage.getItem('bf_name')||`Guest_${Math.floor(Math.random()*900+100)}`,
   klass:localStorage.getItem('bf_class')||'Triggerman',weapon:localStorage.getItem('bf_weapon')||'Assault Rifle',
   settings:{sens:+(localStorage.getItem('bf_sens')||1),fov:+(localStorage.getItem('bf_fov')||82),bob:localStorage.getItem('bf_bob')!=='0',quality:localStorage.getItem('bf_quality')!=='0',musicVolume:clamp(+(localStorage.getItem('bf_music_volume')||82)/100,0,1),sfxVolume:clamp(+(localStorage.getItem('bf_sfx_volume')||92)/100,0,1)},
-  hp:100,alive:true,ammo:30,reloading:false,lastShot:0,players:new Map(),killfeed:[],keys:{},mouseDown:false,ads:false,
+  hp:100,alive:true,ammo:30,reloading:false,lastShot:0,lastHurtAt:0,players:new Map(),killfeed:[],keys:{},mouseDown:false,ads:false,
   yaw:0,pitch:0,pos:new THREE.Vector3(0,0,0),vel:new THREE.Vector3(),grounded:true,slide:0,crouched:false,jumpLatch:false,landGrace:0,speedBoost:1,chat:false,
   remote:new Map(),mobs:new Map(),ping:0,currentBoxes:[],dynamicBlocks:new Map(),buildMode:false,blockIndex:0,mcHotbar:0,mcSprint:false,lastWDown:0,stepAt:0,worldTime:0,streamChunk:'',voxelRenderKey:'',voxelHorizonKey:'',clanRenderKey:'',milanProjectiles:[],miningHeld:false,mining:null,miningSentKey:null,prefetchAt:0,prefetchX:0,prefetchZ:0,musicOn:localStorage.getItem('bf_music')!=='0',musicNextAt:0,musicStep:0,clanCollisionBoxes:[],clanPatrols:[],voxelLastPrune:0,voxelLastHorizonBuild:0,inventory:{},mcSlots:[MC_RESERVED_GUN,null,null,null,null,null,null,null,MC_RESERVED_SWORD],inventoryOpen:false,craftingScope:'inventory',selectedRecipe:null,voxelStructureKey:'',clanCache:new Map(),pendingPlacements:new Map()
 };
@@ -763,7 +763,7 @@ function setupUI(){
   $('#saveSettingsBtn').onclick=()=>{state.name=$('#nameInput').value.trim()||state.name;state.settings.sens=+$('#sensInput').value;state.settings.fov=+$('#fovInput').value;state.settings.bob=$('#bobInput').checked;state.settings.quality=$('#qualityInput').checked;state.settings.musicVolume=clamp(+$('#musicVolumeInput').value/100,0,1);state.settings.sfxVolume=clamp(+$('#sfxVolumeInput').value/100,0,1);localStorage.setItem('bf_name',state.name);localStorage.setItem('bf_sens',state.settings.sens);localStorage.setItem('bf_fov',state.settings.fov);localStorage.setItem('bf_bob',state.settings.bob?'1':'0');localStorage.setItem('bf_quality',state.settings.quality?'1':'0');localStorage.setItem('bf_music_volume',Math.round(state.settings.musicVolume*100));localStorage.setItem('bf_sfx_volume',Math.round(state.settings.sfxVolume*100));applySettings();buildWorld(state.world);connect(true);closeModal('settingsModal');toast('Settings saved')};
   $('#sensInput').oninput=()=>$('#sensVal').textContent=(+$('#sensInput').value).toFixed(2);$('#fovInput').oninput=()=>$('#fovVal').textContent=$('#fovInput').value;$('#musicVolumeInput').oninput=()=>$('#musicVolumeVal').textContent=`${$('#musicVolumeInput').value}%`;$('#sfxVolumeInput').oninput=()=>$('#sfxVolumeVal').textContent=`${$('#sfxVolumeInput').value}%`;
   document.addEventListener('pointerlockchange',()=>{if(document.pointerLockElement!==renderer.domElement&&state.playing&&!state.chat&&!$('#roundBreak').classList.contains('hidden'))return;if(document.pointerLockElement!==renderer.domElement&&state.playing&&!state.chat)showMenu()});
-  document.addEventListener('mousemove',e=>{if(document.pointerLockElement===renderer.domElement&&!state.chat){state.yaw-=e.movementX*.0022*state.settings.sens;state.pitch-=e.movementY*.0022*state.settings.sens;state.pitch=clamp(state.pitch,-1.48,1.48);if(state.world!=='voxel'||mcSelectedItem()===MC_RESERVED_GUN)state.ads=(e.buttons&2)!==0}});
+  document.addEventListener('mousemove',e=>{if(document.pointerLockElement===renderer.domElement&&!state.chat){const sniperAim=state.ads&&state.weapon==='Sniper Rifle'&&(state.world!=='voxel'||mcSelectedItem()===MC_RESERVED_GUN),aimScale=sniperAim?.42:1;state.yaw-=e.movementX*.0022*state.settings.sens*aimScale;state.pitch-=e.movementY*.0022*state.settings.sens*aimScale;state.pitch=clamp(state.pitch,-1.48,1.48);if(state.world!=='voxel'||mcSelectedItem()===MC_RESERVED_GUN)state.ads=(e.buttons&2)!==0}});
   addEventListener('keydown',onKeyDown);addEventListener('keyup',e=>{state.keys[e.code]=false;if(e.code==='Tab')$('#scoreboard').classList.add('hidden');if(e.code==='KeyW')state.mcSprint=false});
   addEventListener('mousedown',e=>{if(e.button===2)e.preventDefault();if(!state.playing||state.chat||state.inventoryOpen)return;if(state.world==='voxel'){const held=mcSelectedItem(),hit=blockRay();if(e.button===0){if(held===MC_RESERVED_GUN){state.mouseDown=true;shoot()}else if(hit?.block){startMining()}else if(held===MC_RESERVED_SWORD||mcItemMeta(held).tool==='sword'){wsSend({t:'melee'});playSwordSound()}}if(e.button===2){if(hit?.block?.type==='crafting_table'){openVoxelInventory('table');return}if(hit?.block?.type==='lever'&&!held){useBlock();return}if(held===MC_RESERVED_GUN){state.ads=true}else if(held&&mcItemMeta(held).placeable&&mcInventoryCount(held)>0){placeBlock(held);playBlockSound('place')}else if(hit?.block?.type==='lever'){useBlock()}}return}if(e.button===0){state.mouseDown=true;shoot()}if(e.button===2)state.ads=true});
   addEventListener('mouseup',e=>{if(e.button===0){state.mouseDown=false;if(state.world==='voxel')stopMining()}if(e.button===2)state.ads=false});addEventListener('wheel',e=>{if(state.world==='voxel'){e.preventDefault();setMinecraftHotbar((state.mcHotbar+(e.deltaY>0?1:-1)+MC_HOTBAR_SIZE)%MC_HOTBAR_SIZE)}},{passive:false});addEventListener('contextmenu',e=>e.preventDefault());
@@ -822,7 +822,8 @@ function handleMessage(m){
   }else if(m.t==='kill'){
     feed(`<b>${esc(m.killer)}</b> <span>${esc(m.weapon)}</span> <em>${esc(m.victim)}</em>`);if(m.victim_id===state.id){state.alive=false;state.hp=0;$('#respawn').classList.remove('hidden');$('#hp').textContent='0';$('#hpbar').style.width='0%';setTimeout(()=>wsSend({t:'respawn'}),1370)}
   }else if(m.t==='respawn'&&m.player.id===state.id){state.pos.set(m.player.x,m.player.y,m.player.z);state.vel.set(0,0,0);state.hp=m.player.hp;state.alive=true;state.ammo=weaponCfg().mag;$('#respawn').classList.add('hidden');updateHP();updateAmmo(true)
-  }else if(m.t==='weapon'){if(state.config.weapons?.[m.weapon]){state.weapon=m.weapon;localStorage.setItem('bf_weapon',state.weapon);state.ammo=weaponCfg().mag;createWeapon();refreshLoadout();buildGunGrid()}}else if(m.t==='milan'){spawnMilanProjectile(m)}else if(m.t==='hit'){if(m.attacker===state.id)hitmarker()}
+  }else if(m.t==='weapon'){if(state.config.weapons?.[m.weapon]){state.weapon=m.weapon;localStorage.setItem('bf_weapon',state.weapon);state.ammo=weaponCfg().mag;createWeapon();refreshLoadout();buildGunGrid()}}else if(m.t==='milan'){spawnMilanProjectile(m)}else if(m.t==='hit'){if(m.attacker===state.id)hitmarker(Boolean(m.headshot))}
+  else if(m.t==='hurt'){if(m.victim===state.id){state.hp=m.hp;state.lastHurtAt=performance.now();damageFeedback(m.damage,m.weapon,Boolean(m.headshot));updateHP()}}
   else if(m.t==='mob_hit'){if(m.attacker===state.id)hitmarker()}
   else if(m.t==='mob_kill'){feed(`<b>${esc(m.killer)}</b> defeated <em>${esc(m.kind)}</em>`)}
   else if(m.t==='mob_attack'){if(m.victim===state.id){state.hp=m.hp;damageFlash();updateHP()}}
@@ -845,11 +846,92 @@ function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;',
 function fmtTime(s){s=Math.max(0,Math.ceil(s));return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`}
 function feed(html){const k=$('#killfeed');const d=document.createElement('div');d.className='feed';d.innerHTML=html;k.prepend(d);setTimeout(()=>d.remove(),4500)}
 function addChat(n,t){const d=document.createElement('div');d.className='chatline';d.innerHTML=`<b>${esc(n)}</b>: ${esc(t)}`;$('#chatlog').append(d);while($('#chatlog').children.length>7)$('#chatlog').firstChild.remove()}
-function hitmarker(){const h=$('#hitmarker');h.classList.add('show');playHitSound();setTimeout(()=>h.classList.remove('show'),85)}
-function damageFlash(){$('#damageFlash').style.background='rgba(255,0,0,.24)';setTimeout(()=>$('#damageFlash').style.background='rgba(255,0,0,0)',90)}
+// BLOCKFRONT_HITFX_V1
+function hitmarker(headshot=false){
+  const h=$('#hitmarker');
+  h.classList.add('show');
+
+  if(headshot){
+    h.style.filter='drop-shadow(0 0 5px rgba(255,90,70,.95))';
+    tone(1520,.045,'sine',.028,1040);
+  }else{
+    h.style.filter='';
+    playHitSound();
+  }
+
+  setTimeout(()=>{
+    h.classList.remove('show');
+    h.style.filter='';
+  },headshot?115:85);
+}
+
+function damageFlash(amount=20,headshot=false){
+  const e=$('#damageFlash');
+  if(!e)return;
+
+  const strength=clamp(
+    .10+Number(amount||0)/420+(headshot?.055:0),
+    .11,
+    .25
+  );
+
+  e.style.transition='opacity .055s ease-out';
+
+  e.style.background=
+    `radial-gradient(
+      circle at 50% 48%,
+      rgba(255,0,0,0) 46%,
+      rgba(160,0,0,${(strength*.32).toFixed(3)}) 72%,
+      rgba(175,0,0,${strength.toFixed(3)}) 100%
+    )`;
+
+  e.style.opacity='1';
+
+  setTimeout(()=>{
+    e.style.transition='opacity .20s ease-out';
+    e.style.opacity='0';
+  },55);
+
+  setTimeout(()=>{
+    e.style.background='rgba(255,0,0,0)';
+  },285);
+}
+
+function playIncomingShot(weapon,headshot=false){
+  const boost=headshot?1.12:1;
+
+  if(weapon==='Shotgun'){
+    gunNoise(.10,.075*boost,1800,55);
+    gunThump(72,.13,.064*boost,30);
+
+  }else if(weapon==='Sniper Rifle'){
+    gunNoise(.055,.070*boost,7800,1000);
+    gunThump(105,.12,.052*boost,36);
+
+  }else if(weapon==='Machine Gun'){
+    gunNoise(.032,.046*boost,4300,420);
+    gunThump(145,.043,.026*boost,62);
+
+  }else{
+    gunNoise(.045,.053*boost,5400,520);
+    gunThump(132,.055,.033*boost,50);
+  }
+
+  if(headshot){
+    setTimeout(
+      ()=>tone(880,.055,'triangle',.018,620),
+      18
+    );
+  }
+}
+
+function damageFeedback(amount,weapon,headshot=false){
+  damageFlash(amount,headshot);
+  playIncomingShot(weapon,headshot);
+}
 
 function renderSnapshot(players){
-  const seen=new Set();for(const p of players){state.players.set(p.id,p);seen.add(p.id);if(p.id===state.id){if(p.hp<state.hp)damageFlash();state.hp=p.hp;state.alive=p.alive;updateHP();continue}let r=state.remote.get(p.id);if(!r){r=createRemote(p);state.remote.set(p.id,r)}r.target.set(p.x,p.y,p.z);r.yaw=p.yaw;r.alive=p.alive;r.group.visible=p.alive}
+  const seen=new Set();for(const p of players){state.players.set(p.id,p);seen.add(p.id);if(p.id===state.id){if(p.hp<state.hp&&performance.now()-state.lastHurtAt>240)damageFlash(state.hp-p.hp,false);state.hp=p.hp;state.alive=p.alive;updateHP();continue}let r=state.remote.get(p.id);if(!r){r=createRemote(p);state.remote.set(p.id,r)}r.target.set(p.x,p.y,p.z);r.yaw=p.yaw;r.alive=p.alive;r.group.visible=p.alive}
   for(const [id,r] of state.remote)if(!seen.has(id)){remoteGroup.remove(r.group);state.remote.delete(id)}
 }
 function createRemote(p){
@@ -1138,7 +1220,7 @@ function updateDayNight(){
 let netAcc=0,menuCamT=0,frameCount=0,fpsAcc=0;
 function animate(){
   requestAnimationFrame(animate);const dt=Math.min(.033,clock?clock.getDelta():.016);frameCount++;fpsAcc+=dt;if(fpsAcc>1){$('#menuFps').textContent=`${Math.round(frameCount/fpsAcc)} FPS`;frameCount=0;fpsAcc=0}updateDayNight();updateStreamingWorld();rebuildVoxelRender();rebuildVoxelHorizon();updateCleanerBots(dt);updateGuineaPig();updateClanPatrols();updateMilanProjectiles(dt);updateMining();updateVoxelPrefetch();updateWorldMusic();if(stormRing)stormRing.rotation.y+=dt*.08;
-  if(state.playing){physics(dt);camera.position.set(state.pos.x,state.pos.y+(state.world==='voxel'?(state.crouched?2.90:3.24):(state.crouched?1.18:1.62)),state.pos.z);camera.rotation.set(state.pitch,state.yaw,0);const targetFov=state.ads&&!state.buildMode?Math.max(48,state.settings.fov*.68):state.settings.fov;camera.fov=lerp(camera.fov,targetFov,1-Math.pow(.001,dt));camera.updateProjectionMatrix();const sp=Math.hypot(state.vel.x,state.vel.z),bob=state.settings.bob&&state.grounded?Math.sin(performance.now()*.015)*Math.min(.014,sp*.0013):0;const adsX=state.ads&&!state.buildMode?-.32:.05,adsY=state.ads&&!state.buildMode?.02:-.02;if(weaponGroup){weaponGroup.position.x=lerp(weaponGroup.position.x,adsX,dt*12);weaponGroup.position.y=lerp(weaponGroup.position.y,adsY+bob,dt*12);weaponGroup.position.z=lerp(weaponGroup.position.z,0,dt*18);weaponGroup.rotation.x=lerp(weaponGroup.rotation.x,0,dt*16)}$('#crosshair').style.opacity=state.ads&&!state.buildMode?.28:1;netAcc+=dt;if(netAcc>.05){netAcc=0;wsSend({t:'state',x:state.pos.x,y:state.pos.y,z:state.pos.z,yaw:state.yaw,pitch:state.pitch,vx:state.vel.x,vy:state.vel.y,vz:state.vel.z})}if(state.mouseDown)shoot();
+  if(state.playing){physics(dt);camera.position.set(state.pos.x,state.pos.y+(state.world==='voxel'?(state.crouched?2.90:3.24):(state.crouched?1.18:1.62)),state.pos.z);camera.rotation.set(state.pitch,state.yaw,0);const sniperScoped=state.ads&&!state.buildMode&&state.weapon==='Sniper Rifle'&&(state.world!=='voxel'||state.mcHotbar===0);const targetFov=sniperScoped?Math.max(22,state.settings.fov*.30):state.ads&&!state.buildMode?Math.max(48,state.settings.fov*.68):state.settings.fov;camera.fov=lerp(camera.fov,targetFov,1-Math.pow(.001,dt));camera.updateProjectionMatrix();const sp=Math.hypot(state.vel.x,state.vel.z),bob=state.settings.bob&&state.grounded?Math.sin(performance.now()*.015)*Math.min(.014,sp*.0013):0;const adsX=state.ads&&!state.buildMode?-.32:.05,adsY=state.ads&&!state.buildMode?.02:-.02;if(weaponGroup){weaponGroup.position.x=lerp(weaponGroup.position.x,adsX,dt*12);weaponGroup.position.y=lerp(weaponGroup.position.y,adsY+bob,dt*12);weaponGroup.position.z=lerp(weaponGroup.position.z,0,dt*18);weaponGroup.rotation.x=lerp(weaponGroup.rotation.x,0,dt*16);weaponGroup.visible=!sniperScoped}$('#crosshair').style.opacity=sniperScoped?.72:(state.ads&&!state.buildMode?.28:1);netAcc+=dt;if(netAcc>.05){netAcc=0;wsSend({t:'state',x:state.pos.x,y:state.pos.y,z:state.pos.z,yaw:state.yaw,pitch:state.pitch,vx:state.vel.x,vy:state.vel.y,vz:state.vel.z})}if(state.mouseDown)shoot();
   }else{menuCamT+=dt*.13;const radius=state.world==='stadium'?25:16;camera.position.set(Math.sin(menuCamT)*radius,6+Math.sin(menuCamT*.55)*1.2,Math.cos(menuCamT)*radius);camera.lookAt(0,2,0);if(weaponGroup)weaponGroup.position.set(.05,-.02,0)}
   for(const r of state.remote.values()){r.group.position.lerp(r.target,1-Math.pow(.0008,dt));r.group.rotation.y=r.yaw}for(const r of state.mobs.values())r.group.position.lerp(r.target,1-Math.pow(.001,dt));for(const g of decorGroup.children){if(g.userData&&g.userData.billboard)g.lookAt(camera.position)}renderer.render(scene,camera);
 }
