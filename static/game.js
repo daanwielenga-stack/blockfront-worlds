@@ -1520,7 +1520,7 @@ function updateDayNight(){
 
 let netAcc=0,menuCamT=0,frameCount=0,fpsAcc=0;
 function animate(){
-  requestAnimationFrame(animate);const dt=Math.min(.033,clock?clock.getDelta():.016);frameCount++;fpsAcc+=dt;if(fpsAcc>1){$('#menuFps').textContent=`${Math.round(frameCount/fpsAcc)} FPS`;frameCount=0;fpsAcc=0}updateDayNight();updateStreamingWorld();rebuildVoxelRender();rebuildVoxelHorizon();updateCleanerBots(dt);updateGuineaPig();updateClanPatrols();updateMilanProjectiles(dt);updateBomhofNukes(dt);updateMining();updateVoxelPrefetch();updateWorldMusic();if(stormRing)stormRing.rotation.y+=dt*.08;
+  requestAnimationFrame(animate);const dt=Math.min(.033,clock?clock.getDelta():.016);frameCount++;fpsAcc+=dt;if(fpsAcc>1){$('#menuFps').textContent=`${Math.round(frameCount/fpsAcc)} FPS`;frameCount=0;fpsAcc=0}updateDayNight();updateStreamingWorld();rebuildVoxelRender();rebuildVoxelHorizon();updateCleanerBots(dt);updateGuineaPig();updateClanPatrols();updateMilanProjectiles(dt);updateBomhofNukes(dt);updateMining();updateVoxelPrefetch();updateWorldMusic();updateNyanCat(dt);if(stormRing)stormRing.rotation.y+=dt*.08;
   if(state.playing){physics(dt);camera.position.set(state.pos.x,state.pos.y+(state.world==='voxel'?(state.crouched?2.90:3.24):(state.crouched?1.18:1.62)),state.pos.z);camera.rotation.set(state.pitch,state.yaw,0);const sniperScoped=state.ads&&!state.buildMode&&state.weapon==='Sniper Rifle'&&(state.world!=='voxel'||state.mcHotbar===0);const targetFov=sniperScoped?Math.max(22,state.settings.fov*.30):state.ads&&!state.buildMode?Math.max(48,state.settings.fov*.68):state.settings.fov;camera.fov=lerp(camera.fov,targetFov,1-Math.pow(.001,dt));camera.updateProjectionMatrix();const sp=Math.hypot(state.vel.x,state.vel.z),bob=state.settings.bob&&state.grounded?Math.sin(performance.now()*.015)*Math.min(.014,sp*.0013):0;const adsX=state.ads&&!state.buildMode?-.32:.05,adsY=state.ads&&!state.buildMode?.02:-.02;if(weaponGroup){weaponGroup.position.x=lerp(weaponGroup.position.x,adsX,dt*12);weaponGroup.position.y=lerp(weaponGroup.position.y,adsY+bob,dt*12);weaponGroup.position.z=lerp(weaponGroup.position.z,0,dt*18);weaponGroup.rotation.x=lerp(weaponGroup.rotation.x,0,dt*16);weaponGroup.visible=!sniperScoped}$('#crosshair').style.opacity=sniperScoped?.72:(state.ads&&!state.buildMode?.28:1);netAcc+=dt;if(netAcc>.05){netAcc=0;wsSend({t:'state',x:state.pos.x,y:state.pos.y,z:state.pos.z,yaw:state.yaw,pitch:state.pitch,vx:state.vel.x,vy:state.vel.y,vz:state.vel.z})}if(state.mouseDown)shoot();
   }else{menuCamT+=dt*.13;const radius=state.world==='stadium'?25:16;camera.position.set(Math.sin(menuCamT)*radius,6+Math.sin(menuCamT*.55)*1.2,Math.cos(menuCamT)*radius);camera.lookAt(0,2,0);if(weaponGroup)weaponGroup.position.set(.05,-.02,0)}
   for(const r of state.remote.values()){r.group.position.lerp(r.target,1-Math.pow(.0008,dt));r.group.rotation.y=r.yaw}for(const r of state.mobs.values())r.group.position.lerp(r.target,1-Math.pow(.001,dt));for(const g of decorGroup.children){if(g.userData&&g.userData.billboard)g.lookAt(camera.position)}bfFrameVisualFX(dt);renderer.render(scene,camera);
@@ -4007,6 +4007,1055 @@ buildWorld = function(id){
       )
       .catch(()=>{});
   }
+
+
+  return r;
+};
+
+
+// BLOCKFRONT_POLISH_POSTERS_NYAN_V3
+
+let bfNyanNextAt =
+  performance.now() +
+  45000 +
+  Math.random()*30000;
+
+let bfNyanFx = null;
+let bfNyanMusicTimer = null;
+let bfNyanAudio = null;
+let bfBomhofToastAt = 0;
+
+const bfPosterUrls =
+  Array.from(
+    {length:9},
+    (_,i) =>
+      `/static/assets/posters/poster_${i+1}.webp`
+  );
+
+
+// ============================================================
+// REMOVE LARGE PROCEDURAL FPS HAND / FOREARM
+// ============================================================
+
+function bfCleanupWeaponHands(){
+
+  if(!weaponGroup){
+    return;
+  }
+
+  for(
+    const n
+    of [...weaponGroup.children]
+  ){
+
+    if(!n?.isMesh){
+      continue;
+    }
+
+    const type =
+      n.geometry?.type || '';
+
+    const hex =
+      n.material
+      ?.color
+      ?.getHex
+      ?.();
+
+    const skin =
+      hex === 0xc88c67;
+
+    const glove =
+      hex === 0x20282d;
+
+    const arm =
+      type === 'CylinderGeometry' &&
+      skin &&
+      n.position.y < -.18;
+
+    const hand =
+      type === 'SphereGeometry' &&
+      (skin || glove) &&
+      n.position.y < -.12 &&
+      n.position.z < 0 &&
+      n.position.z > -1.2;
+
+    if(
+      arm ||
+      hand
+    ){
+
+      weaponGroup.remove(n);
+
+      try{
+        n.geometry?.dispose?.();
+      }catch{}
+    }
+  }
+}
+
+
+const bfCreateWeaponNoHand =
+  createWeapon;
+
+
+createWeapon = function(...args){
+
+  const r =
+    bfCreateWeaponNoHand(
+      ...args
+    );
+
+  bfCleanupWeaponHands();
+
+  return r;
+};
+
+
+setTimeout(
+  bfCleanupWeaponHands,
+  0
+);
+
+
+// ============================================================
+// BOMHOF GUN RESPONSIVENESS
+// ============================================================
+
+const bfSelectWeaponResponsive =
+  selectWeapon;
+
+
+selectWeapon = function(name){
+
+  const r =
+    bfSelectWeaponResponsive(
+      name
+    );
+
+  state.lastShot = 0;
+
+
+  if(
+    name === 'Bomhof Gun'
+  ){
+
+    state.reloading = false;
+
+    state.ammo =
+      weaponCfg().mag;
+
+    updateAmmo(true);
+  }
+
+
+  return r;
+};
+
+
+const bfShootResponsive =
+  shoot;
+
+
+shoot = function(){
+
+  if(
+    state.weapon === 'Bomhof Gun' &&
+    state.reloading
+  ){
+
+    const now =
+      performance.now();
+
+    if(
+      now -
+      bfBomhofToastAt >
+      700
+    ){
+
+      bfBomhofToastAt =
+        now;
+
+      toast(
+        'Bomhof Gun recharging?'
+      );
+    }
+
+    return;
+  }
+
+
+  if(
+    state.weapon === 'Bomhof Gun' &&
+    state.ammo <= 0
+  ){
+
+    reload();
+
+    toast(
+      'Reloading Bomhof Gun?'
+    );
+
+    return;
+  }
+
+
+  const before =
+    state.ammo;
+
+  const r =
+    bfShootResponsive();
+
+
+  if(
+    state.weapon === 'Bomhof Gun' &&
+    state.ammo < before
+  ){
+
+    toast(
+      'ATOMIC BOMB LAUNCHED'
+    );
+  }
+
+
+  return r;
+};
+
+
+// ============================================================
+// POSTERS
+// ============================================================
+
+function bfPosterCandidateBoxes(id){
+
+  return (
+    state.config
+    ?.worlds
+    ?.[id]
+    ?.boxes || []
+  ).filter(
+    b =>
+      Number(b.h || 0) >= 2.2 &&
+      Number(b.w || 0) >= 2 &&
+      Number(b.d || 0) >= 1.2
+  );
+}
+
+
+function bfAddPosterMesh(
+  url,
+  pos,
+  rotY=0,
+  height=2.2
+){
+
+  const group =
+    new THREE.Group();
+
+  group.position.copy(
+    pos
+  );
+
+  group.rotation.y =
+    rotY;
+
+
+  const frame =
+    new THREE.Mesh(
+
+      new THREE.BoxGeometry(
+        1.75,
+        height+.18,
+        .10
+      ),
+
+      new THREE.MeshStandardMaterial({
+        color:0x17191c,
+        roughness:.7,
+        metalness:.25
+      })
+    );
+
+  frame.position.z =
+    -.055;
+
+  group.add(frame);
+
+
+  const plane =
+    new THREE.Mesh(
+
+      new THREE.PlaneGeometry(
+        1,
+        1
+      ),
+
+      new THREE.MeshBasicMaterial({
+        color:0xffffff,
+        side:THREE.DoubleSide
+      })
+    );
+
+  plane.position.z =
+    .012;
+
+  group.add(plane);
+
+
+  new THREE.TextureLoader()
+    .load(
+
+      url,
+
+      tex => {
+
+        tex.colorSpace =
+          THREE.SRGBColorSpace;
+
+        plane.material.map =
+          tex;
+
+        plane.material.needsUpdate =
+          true;
+
+        const aspect =
+          (
+            tex.image?.width || 1
+          ) /
+          (
+            tex.image?.height || 1
+          );
+
+        plane.scale.set(
+          height*aspect,
+          height,
+          1
+        );
+      },
+
+      undefined,
+
+      () => {
+        group.visible =
+          false;
+      }
+    );
+
+
+  decorGroup.add(
+    group
+  );
+
+  return group;
+}
+
+
+function bfAddPhotoPosters(id){
+
+  const boxes =
+    bfPosterCandidateBoxes(id);
+
+  let placed = 0;
+
+
+  for(
+    let i=0;
+    i<bfPosterUrls.length &&
+    placed<5 &&
+    boxes.length;
+    i++
+  ){
+
+    const b =
+      boxes[
+        (i*3+1) %
+        boxes.length
+      ];
+
+    const longX =
+      Number(b.w || 0) >=
+      Number(b.d || 0);
+
+
+    const pos =
+      new THREE.Vector3(
+
+        Number(b.x || 0) +
+        (
+          longX
+            ? 0
+            : Number(b.w || 0)/2+.08
+        ),
+
+        Number(b.y || 0) +
+        Math.min(
+          .4,
+          Number(b.h || 0)*.08
+        ),
+
+        Number(b.z || 0) +
+        (
+          longX
+            ? Number(b.d || 0)/2+.08
+            : 0
+        )
+      );
+
+
+    bfAddPosterMesh(
+
+      bfPosterUrls[i],
+
+      pos,
+
+      longX
+        ? 0
+        : Math.PI/2,
+
+      Math.min(
+        2.35,
+        Math.max(
+          1.55,
+          Number(b.h || 3)*.42
+        )
+      )
+    );
+
+
+    placed++;
+  }
+
+
+  if(
+    placed < 3
+  ){
+
+    const fallback =
+      id === 'voxel'
+
+      ? [
+          [8,4,-10,0],
+          [-10,4,-7,0],
+          [5,4,11,Math.PI]
+        ]
+
+      : id === 'clan'
+
+      ? [
+          [10,3,-12,0],
+          [-12,3,-8,0],
+          [4,3,14,Math.PI]
+        ]
+
+      : [
+          [8,3,-10,0],
+          [-8,3,-10,0],
+          [0,3,12,Math.PI]
+        ];
+
+
+    fallback.forEach(
+      (q,j) => {
+
+        bfAddPosterMesh(
+
+          bfPosterUrls[
+            (
+              placed+
+              j+
+              4
+            ) %
+            bfPosterUrls.length
+          ],
+
+          new THREE.Vector3(
+            q[0],
+            q[1],
+            q[2]
+          ),
+
+          q[3],
+
+          2.15
+        );
+      }
+    );
+  }
+}
+
+
+// ============================================================
+// NYAN CAT
+// ============================================================
+
+function bfNyanTone(
+  freq,
+  dur=.105,
+  gain=.022
+){
+
+  const ac =
+    audioCtx();
+
+  if(
+    !ac ||
+    !state.musicOn
+  ){
+    return;
+  }
+
+
+  const o =
+    ac.createOscillator();
+
+  const g =
+    ac.createGain();
+
+  o.type =
+    'square';
+
+  o.frequency.value =
+    freq;
+
+
+  const volume =
+    Math.max(
+      .0001,
+      (
+        state.settings.musicVolume ??
+        1
+      ) * gain
+    );
+
+
+  g.gain.setValueAtTime(
+    volume,
+    ac.currentTime
+  );
+
+
+  g.gain.exponentialRampToValueAtTime(
+    .0001,
+    ac.currentTime+dur
+  );
+
+
+  o.connect(g)
+   .connect(ac.destination);
+
+
+  o.start();
+
+  o.stop(
+    ac.currentTime+
+    dur+
+    .02
+  );
+}
+
+
+function bfStartNyanSynth(){
+
+  if(
+    !state.musicOn
+  ){
+    return;
+  }
+
+
+  const seq = [
+    659.25,
+    783.99,
+    987.77,
+    783.99,
+    880,
+    659.25,
+    739.99,
+    987.77,
+    1046.5,
+    880,
+    783.99,
+    659.25
+  ];
+
+
+  let k = 0;
+
+
+  bfNyanMusicTimer =
+    setInterval(
+      () => {
+
+        if(
+          bfNyanFx &&
+          state.musicOn
+        ){
+
+          bfNyanTone(
+            seq[
+              k++ %
+              seq.length
+            ],
+            .11,
+            .018
+          );
+        }
+      },
+      125
+    );
+}
+
+
+async function bfStartNyanMusic(){
+
+  if(
+    !state.musicOn
+  ){
+    return;
+  }
+
+
+  try{
+
+    const r =
+      await fetch(
+        '/static/audio/nyan_theme.ogg',
+        {
+          method:'HEAD',
+          cache:'no-store'
+        }
+      );
+
+
+    if(r.ok){
+
+      bfNyanAudio =
+        new Audio(
+          '/static/audio/nyan_theme.ogg'
+        );
+
+
+      bfNyanAudio.volume =
+        Math.min(
+          1,
+          state.settings.musicVolume ??
+          1
+        );
+
+
+      bfNyanAudio.loop =
+        true;
+
+
+      await bfNyanAudio.play();
+
+      return;
+    }
+
+  }catch{}
+
+
+  bfStartNyanSynth();
+}
+
+
+function bfStopNyanMusic(){
+
+  if(
+    bfNyanMusicTimer
+  ){
+
+    clearInterval(
+      bfNyanMusicTimer
+    );
+
+    bfNyanMusicTimer =
+      null;
+  }
+
+
+  if(
+    bfNyanAudio
+  ){
+
+    try{
+
+      bfNyanAudio.pause();
+
+      bfNyanAudio.currentTime =
+        0;
+
+    }catch{}
+
+
+    bfNyanAudio =
+      null;
+  }
+}
+
+
+function bfRemoveNyanCat(
+  schedule=true
+){
+
+  if(
+    bfNyanFx?.group
+  ){
+
+    scene.remove(
+      bfNyanFx.group
+    );
+  }
+
+
+  bfNyanFx =
+    null;
+
+
+  bfStopNyanMusic();
+
+
+  if(
+    schedule
+  ){
+
+    bfNyanNextAt =
+      performance.now() +
+      150000 +
+      Math.random()*90000;
+  }
+}
+
+
+function bfPixelBox(
+  g,
+  sx,
+  sy,
+  sz,
+  color,
+  x,
+  y,
+  z
+){
+
+  const m =
+    new THREE.Mesh(
+
+      new THREE.BoxGeometry(
+        sx,
+        sy,
+        sz
+      ),
+
+      new THREE.MeshBasicMaterial({
+        color,
+        toneMapped:false
+      })
+    );
+
+
+  m.position.set(
+    x,
+    y,
+    z
+  );
+
+
+  g.add(m);
+
+  return m;
+}
+
+
+function bfSpawnNyanCat(){
+
+  if(
+    bfNyanFx ||
+    !state.playing
+  ){
+    return;
+  }
+
+
+  const g =
+    new THREE.Group();
+
+
+  bfPixelBox(
+    g,
+    2.3,
+    1.35,
+    .55,
+    0xd8a16f,
+    0,
+    0,
+    0
+  );
+
+
+  bfPixelBox(
+    g,
+    1.8,
+    1,
+    .58,
+    0xff78b4,
+    0,
+    0,
+    .03
+  );
+
+
+  bfPixelBox(
+    g,
+    .82,
+    .82,
+    .58,
+    0x9a9a9a,
+    1.42,
+    .03,
+    0
+  );
+
+
+  bfPixelBox(
+    g,
+    .18,
+    .18,
+    .61,
+    0x111111,
+    1.25,
+    .13,
+    .31
+  );
+
+
+  bfPixelBox(
+    g,
+    .18,
+    .18,
+    .61,
+    0x111111,
+    1.56,
+    .13,
+    .31
+  );
+
+
+  bfPixelBox(
+    g,
+    .22,
+    .16,
+    .61,
+    0xff7da8,
+    1.41,
+    -.12,
+    .31
+  );
+
+
+  for(
+    const [x,y]
+    of [
+      [-.72,-.72],
+      [.18,-.72],
+      [1.2,-.62]
+    ]
+  ){
+
+    bfPixelBox(
+      g,
+      .34,
+      .36,
+      .48,
+      0x777777,
+      x,
+      y,
+      0
+    );
+  }
+
+
+  [
+    0xff3333,
+    0xff9933,
+    0xffff33,
+    0x33dd66,
+    0x3399ff,
+    0xaa55ff
+  ]
+  .forEach(
+    (c,i) =>
+
+      bfPixelBox(
+        g,
+        11,
+        .18,
+        .18,
+        c,
+        -6.3,
+        .55-i*.2,
+        -.35
+      )
+  );
+
+
+  const fwd =
+    new THREE.Vector3(
+      -Math.sin(state.yaw),
+      0,
+      -Math.cos(state.yaw)
+    );
+
+
+  const right =
+    new THREE.Vector3(
+      Math.cos(state.yaw),
+      0,
+      -Math.sin(state.yaw)
+    );
+
+
+  const start =
+    state.pos
+    .clone()
+    .addScaledVector(
+      right,
+      -48
+    )
+    .addScaledVector(
+      fwd,
+      34
+    );
+
+
+  start.y =
+    Math.max(
+      state.pos.y+15,
+      16
+    );
+
+
+  g.position.copy(
+    start
+  );
+
+
+  g.rotation.y =
+    state.yaw;
+
+
+  scene.add(g);
+
+
+  bfNyanFx = {
+
+    group:g,
+
+    vel:
+      right.multiplyScalar(
+        11.5
+      ),
+
+    age:0,
+
+    dur:9.2,
+
+    baseY:start.y
+  };
+
+
+  bfStartNyanMusic();
+
+
+  toast(
+    'NYAN CAT!'
+  );
+}
+
+
+function updateNyanCat(dt){
+
+  const now =
+    performance.now();
+
+
+  if(
+    !bfNyanFx
+  ){
+
+    if(
+      state.playing &&
+      now >= bfNyanNextAt
+    ){
+
+      bfSpawnNyanCat();
+    }
+
+    return;
+  }
+
+
+  const fx =
+    bfNyanFx;
+
+
+  fx.age +=
+    dt;
+
+
+  fx.group.position
+    .addScaledVector(
+      fx.vel,
+      dt
+    );
+
+
+  fx.group.position.y =
+    fx.baseY +
+    Math.sin(
+      fx.age*5.2
+    )*.45;
+
+
+  fx.group.rotation.z =
+    Math.sin(
+      fx.age*7
+    )*.035;
+
+
+  if(
+    fx.age >=
+    fx.dur
+  ){
+
+    bfRemoveNyanCat(true);
+  }
+}
+
+
+// ============================================================
+// ADD POSTERS AFTER WORLD BUILD
+// ============================================================
+
+const bfBuildWorldWithPosters =
+  buildWorld;
+
+
+buildWorld = function(id){
+
+  bfRemoveNyanCat(false);
+
+
+  const r =
+    bfBuildWorldWithPosters(id);
+
+
+  bfAddPhotoPosters(id);
+
+
+  bfNyanNextAt =
+    performance.now() +
+    45000 +
+    Math.random()*30000;
 
 
   return r;

@@ -1,3 +1,4 @@
+# BLOCKFRONT_POLISH_POSTERS_NYAN_V3
 # BLOCKFRONT_BOMHOF_NUKE_V2
 from __future__ import annotations
 
@@ -62,9 +63,9 @@ WEAPONS = {
     # BLOCKFRONT_HIDESEEK_BOMHOF_V1
     "Bomhof Gun": {
         "damage": 0,
-        "rpm": 5,
+        "rpm": 20,
         "mag": 1,
-        "reload": 8.0,
+        "reload": 2.8,
         "spread": 0.0,
         "range": 140,
         "head_multiplier": 1.0,
@@ -1525,6 +1526,8 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                         continue
 
                     p.weapon = selected
+                    # BLOCKFRONT_BOMHOF_SELECT_RESET_V3
+                    p.last_fire = 0.0
                     await ws.send_json({"t": "weapon", "weapon": p.weapon})
                     await room.emit({"t": "event", "kind": "weapon", "text": f"{p.name} equipped {p.weapon}"})
 
@@ -1584,6 +1587,9 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                 if removed:
                     await room.emit({"t": "block_remove", "key": key})
                     drop = BLOCK_DROPS.get(removed.type)
+                    # BLOCKFRONT_MINING_DROP_FALLBACK_V3
+                    if not drop and MINECRAFT_ITEMS.get(removed.type, {}).get("placeable"):
+                        drop = (removed.type, 1)
                     if drop:
                         item, count = drop
                         room.add_inventory(p, item, count)
@@ -1593,6 +1599,8 @@ async def websocket_endpoint(ws: WebSocket, room_code: str):
                         if random.random() < .12:
                             room.add_inventory(p, "sticks", 1)
                             await ws.send_json({"t": "item_pickup", "item": "sticks", "count": 1, "at": [removed.x, removed.y, removed.z], "inventory": p.inventory})
+                    # BLOCKFRONT_MINING_INVENTORY_SYNC_V3
+                    await ws.send_json({"t": "inventory", "inventory": p.inventory})
                     if removed.type in {"redstone", "lamp", "lever"}:
                         await room.emit_blocks(radius=28)
 
