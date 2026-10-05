@@ -5061,4 +5061,382 @@ buildWorld = function(id){
   return r;
 };
 
+// BLOCKFRONT_KRUNKER_EXPAND_V1_START
+(function(){
+
+  const BF_KR_POSTERS =
+    Array.from(
+      {length:9},
+      (_,i)=>`/static/assets/posters/poster_${i+1}.webp`
+    );
+
+  function bfKrNum(v, fallback=0){
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  function bfKrHex(v){
+    if(typeof v === 'number' && Number.isFinite(v)){
+      return v;
+    }
+    const s = String(v ?? '').trim().toLowerCase();
+    if(!s){
+      return 0xffffff;
+    }
+    if(s.startsWith('#')){
+      return parseInt(s.slice(1), 16);
+    }
+    if(s.startsWith('0x')){
+      return parseInt(s.slice(2), 16);
+    }
+    if(/^[0-9a-f]{6}$/.test(s)){
+      return parseInt(s, 16);
+    }
+    return 0xffffff;
+  }
+
+  function bfIsKrunkerWorld(id){
+    const s = String(id || '').toLowerCase();
+    if(!s){
+      return false;
+    }
+    const themed =
+      ['voxel','mine','clan','clash','fifa','fort','seek','hide'];
+    return !themed.some(k => s.includes(k));
+  }
+
+  function bfExpandKrunkerConfig(id){
+
+    const world = state?.config?.worlds?.[id];
+    if(!world || world._bfKrExpandedV1){
+      return;
+    }
+
+    const originalBoxes =
+      Array.isArray(world.boxes)
+        ? world.boxes.slice()
+        : [];
+
+    // Remove giant dark wall-like blockers to open the map.
+    world.boxes = originalBoxes.filter(b => {
+
+      const w = bfKrNum(b.w);
+      const d = bfKrNum(b.d);
+      const h = bfKrNum(b.h);
+      const tag = String(b.tag || '').toLowerCase();
+      const colorText = String(b.c ?? b.color ?? '').toLowerCase();
+
+      const hugeLongWall =
+        (
+          Math.max(w, d) >= 34 &&
+          Math.min(w, d) <= 4 &&
+          h >= 3
+        ) ||
+        (
+          w * d >= 240 &&
+          h >= 3
+        );
+
+      const wallish =
+        tag.includes('wall') ||
+        tag.includes('boundary') ||
+        colorText.includes('000') ||
+        colorText.includes('111') ||
+        colorText.includes('222') ||
+        colorText.includes('black');
+
+      return !(hugeLongWall && wallish);
+    });
+
+    const buildingColors = [
+      0x2e5aac,
+      0x8d3fb0,
+      0xb85a2b,
+      0x3d8a68,
+      0x70757f,
+      0x9c3434,
+      0x1f7b9e,
+      0xb18f2f,
+      0x5b4a3f,
+      0x4660d6
+    ];
+
+    const roofColors = [
+      0xd2dae6,
+      0xa8b6c8,
+      0xe5d6c2,
+      0xcad7c1,
+      0xddd0f2,
+      0xe0bbbb
+    ];
+
+    function pushBox(x,y,z,w,h,d,c,tag='building'){
+      world.boxes.push({
+        x, y, z, w, h, d, c, tag
+      });
+    }
+
+    function addBuilding(cx, cz, w, d, h, bodyColor, roofColor, idx){
+
+      pushBox(cx, h/2, cz, w, h, d, bodyColor, 'building');
+
+      pushBox(
+        cx,
+        h + 0.35,
+        cz,
+        w + 0.35,
+        0.7,
+        d + 0.35,
+        roofColor,
+        'roof'
+      );
+
+      // Door
+      pushBox(
+        cx,
+        1.0,
+        cz + d/2 + 0.08,
+        Math.max(0.9, w * 0.22),
+        2.0,
+        0.18,
+        0x1e1e22,
+        'door'
+      );
+
+      // Windows
+      const winColor = 0xbfd9ff;
+
+      if(w >= 4){
+        pushBox(
+          cx - w*0.2,
+          h*0.56,
+          cz + d/2 + 0.09,
+          0.9,
+          0.9,
+          0.08,
+          winColor,
+          'window'
+        );
+        pushBox(
+          cx + w*0.2,
+          h*0.56,
+          cz + d/2 + 0.09,
+          0.9,
+          0.9,
+          0.08,
+          winColor,
+          'window'
+        );
+      }
+
+      // Side accent stripe
+      pushBox(
+        cx - w/2 - 0.03,
+        h*0.5,
+        cz,
+        0.12,
+        Math.max(2.2, h*0.75),
+        d*0.9,
+        roofColor,
+        'accent'
+      );
+
+      // Small stoop
+      pushBox(
+        cx,
+        0.18,
+        cz + d/2 + 0.65,
+        Math.max(1.2, w * 0.3),
+        0.35,
+        0.9,
+        0x777777,
+        'step'
+      );
+    }
+
+    const spots = [
+      [-28,-24], [-18,-10], [-30,8], [-16,24],
+      [0,-28], [0,-10], [0,12], [0,28],
+      [18,-22], [16,-4], [20,14], [26,28],
+      [34,-8], [34,16], [-36,0], [38,2]
+    ];
+
+    spots.forEach((p, i) => {
+      const w = 3.6 + (i % 4) * 1.1;
+      const d = 3.8 + ((i+1) % 3) * 1.2;
+      const h = 4.8 + (i % 5) * 1.4;
+      const body = buildingColors[i % buildingColors.length];
+      const roof = roofColors[i % roofColors.length];
+      addBuilding(p[0], p[1], w, d, h, body, roof, i);
+    });
+
+    // Central cover / props / crates
+    const coverColors = [
+      0x5a3c28, 0x8a5d34, 0x4b6aa8, 0x6e7f3f, 0x9b3f6f
+    ];
+
+    const coverSpots = [
+      [-10,0], [-4,6], [6,-2], [10,8], [14,-10],
+      [-14,-8], [-22,4], [24,4], [30,-18], [-30,18]
+    ];
+
+    coverSpots.forEach((p, i) => {
+      pushBox(
+        p[0],
+        0.9,
+        p[1],
+        2.2 + (i % 3) * 0.6,
+        1.8 + (i % 2) * 0.5,
+        2.0 + ((i+1) % 2) * 0.8,
+        coverColors[i % coverColors.length],
+        'crate'
+      );
+    });
+
+    // Small ramps for movement variation
+    const rampColor = 0x6a6a72;
+    const rampSpots = [
+      [-8,-16], [8,18], [24,-2], [-24,12]
+    ];
+
+    rampSpots.forEach((p, i) => {
+      pushBox(
+        p[0],
+        0.35,
+        p[1],
+        3.4,
+        0.7,
+        4.8,
+        rampColor,
+        'ramp'
+      );
+    });
+
+    // Extra floor accents / plazas
+    const plazaColors = [0x909090, 0x7e8a96, 0x8c8770];
+    const plazas = [
+      [0,0,8,0.1,8],
+      [-20,20,6,0.1,6],
+      [22,-18,7,0.1,5]
+    ];
+
+    plazas.forEach((p, i) => {
+      pushBox(
+        p[0],
+        0.05,
+        p[1],
+        p[2],
+        p[3],
+        p[4],
+        plazaColors[i % plazaColors.length],
+        'plaza'
+      );
+    });
+
+    world._bfKrExpandedV1 = true;
+  }
+
+  function bfKrAddPoster(url, x, y, z, rotY, height=2.2){
+
+    if(!decorGroup){
+      return;
+    }
+
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = rotY;
+
+    const frame = new THREE.Mesh(
+      new THREE.BoxGeometry(1.7, height + 0.16, 0.08),
+      new THREE.MeshStandardMaterial({
+        color: 0x17191c,
+        roughness: 0.72,
+        metalness: 0.2
+      })
+    );
+    frame.position.z = -0.04;
+    g.add(frame);
+
+    const plane = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        side: THREE.DoubleSide
+      })
+    );
+    plane.position.z = 0.01;
+    g.add(plane);
+
+    new THREE.TextureLoader().load(
+      url,
+      tex => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        plane.material.map = tex;
+        plane.material.needsUpdate = true;
+
+        const aspect =
+          (tex.image?.width || 1) /
+          (tex.image?.height || 1);
+
+        plane.scale.set(
+          height * aspect,
+          height,
+          1
+        );
+      },
+      undefined,
+      () => {
+        g.visible = false;
+      }
+    );
+
+    decorGroup.add(g);
+  }
+
+  function bfKrPlaceAllPosters(id){
+
+    if(!bfIsKrunkerWorld(id)){
+      return;
+    }
+
+    const posterSpots = [
+      [-32, 3.2, -30, 0],
+      [-12, 3.4, -22, 0],
+      [10, 3.4, -30, 0],
+      [30, 3.5, -20, 0],
+      [-28, 3.3, 6, Math.PI/2],
+      [-4, 3.5, 18, Math.PI],
+      [18, 3.3, 8, Math.PI/2],
+      [30, 3.6, 24, Math.PI],
+      [0, 3.4, 30, Math.PI]
+    ];
+
+    posterSpots.forEach((p, i) => {
+      bfKrAddPoster(
+        BF_KR_POSTERS[i % BF_KR_POSTERS.length],
+        p[0], p[1], p[2], p[3], 2.25
+      );
+    });
+  }
+
+  const bfKrPrevBuildWorld = buildWorld;
+
+  buildWorld = function(id){
+
+    if(bfIsKrunkerWorld(id)){
+      bfExpandKrunkerConfig(id);
+    }
+
+    const r = bfKrPrevBuildWorld(id);
+
+    if(bfIsKrunkerWorld(id)){
+      bfKrPlaceAllPosters(id);
+    }
+
+    return r;
+  };
+
+})();
+// BLOCKFRONT_KRUNKER_EXPAND_V1_END
+
 boot().catch(err=>{console.error(err);document.body.insertAdjacentHTML('beforeend',`<div style="position:fixed;inset:20px;z-index:999;background:#200;color:#fff;padding:20px">Blockfront failed to start: ${esc(err.message||err)}</div>`)});
