@@ -1523,7 +1523,2493 @@ function animate(){
   requestAnimationFrame(animate);const dt=Math.min(.033,clock?clock.getDelta():.016);frameCount++;fpsAcc+=dt;if(fpsAcc>1){$('#menuFps').textContent=`${Math.round(frameCount/fpsAcc)} FPS`;frameCount=0;fpsAcc=0}updateDayNight();updateStreamingWorld();rebuildVoxelRender();rebuildVoxelHorizon();updateCleanerBots(dt);updateGuineaPig();updateClanPatrols();updateMilanProjectiles(dt);updateBomhofNukes(dt);updateMining();updateVoxelPrefetch();updateWorldMusic();if(stormRing)stormRing.rotation.y+=dt*.08;
   if(state.playing){physics(dt);camera.position.set(state.pos.x,state.pos.y+(state.world==='voxel'?(state.crouched?2.90:3.24):(state.crouched?1.18:1.62)),state.pos.z);camera.rotation.set(state.pitch,state.yaw,0);const sniperScoped=state.ads&&!state.buildMode&&state.weapon==='Sniper Rifle'&&(state.world!=='voxel'||state.mcHotbar===0);const targetFov=sniperScoped?Math.max(22,state.settings.fov*.30):state.ads&&!state.buildMode?Math.max(48,state.settings.fov*.68):state.settings.fov;camera.fov=lerp(camera.fov,targetFov,1-Math.pow(.001,dt));camera.updateProjectionMatrix();const sp=Math.hypot(state.vel.x,state.vel.z),bob=state.settings.bob&&state.grounded?Math.sin(performance.now()*.015)*Math.min(.014,sp*.0013):0;const adsX=state.ads&&!state.buildMode?-.32:.05,adsY=state.ads&&!state.buildMode?.02:-.02;if(weaponGroup){weaponGroup.position.x=lerp(weaponGroup.position.x,adsX,dt*12);weaponGroup.position.y=lerp(weaponGroup.position.y,adsY+bob,dt*12);weaponGroup.position.z=lerp(weaponGroup.position.z,0,dt*18);weaponGroup.rotation.x=lerp(weaponGroup.rotation.x,0,dt*16);weaponGroup.visible=!sniperScoped}$('#crosshair').style.opacity=sniperScoped?.72:(state.ads&&!state.buildMode?.28:1);netAcc+=dt;if(netAcc>.05){netAcc=0;wsSend({t:'state',x:state.pos.x,y:state.pos.y,z:state.pos.z,yaw:state.yaw,pitch:state.pitch,vx:state.vel.x,vy:state.vel.y,vz:state.vel.z})}if(state.mouseDown)shoot();
   }else{menuCamT+=dt*.13;const radius=state.world==='stadium'?25:16;camera.position.set(Math.sin(menuCamT)*radius,6+Math.sin(menuCamT*.55)*1.2,Math.cos(menuCamT)*radius);camera.lookAt(0,2,0);if(weaponGroup)weaponGroup.position.set(.05,-.02,0)}
-  for(const r of state.remote.values()){r.group.position.lerp(r.target,1-Math.pow(.0008,dt));r.group.rotation.y=r.yaw}for(const r of state.mobs.values())r.group.position.lerp(r.target,1-Math.pow(.001,dt));for(const g of decorGroup.children){if(g.userData&&g.userData.billboard)g.lookAt(camera.position)}renderer.render(scene,camera);
+  for(const r of state.remote.values()){r.group.position.lerp(r.target,1-Math.pow(.0008,dt));r.group.rotation.y=r.yaw}for(const r of state.mobs.values())r.group.position.lerp(r.target,1-Math.pow(.001,dt));for(const g of decorGroup.children){if(g.userData&&g.userData.billboard)g.lookAt(camera.position)}bfFrameVisualFX(dt);renderer.render(scene,camera);
 }
+
+
+// BLOCKFRONT_BREACHLINE_VISUAL_V1
+// Visual-only rendering upgrade based on the rendering techniques used by
+// the supplied BREACHLINE prototype. Gameplay/network/collision logic untouched.
+
+const bfVisualTextures = new Map();
+const bfVisualMaterials = new Map();
+
+let bfVisualLights = null;
+let bfSkyDome = null;
+let bfDust = null;
+let bfMuzzleFlash = null;
+
+
+// ------------------------------------------------------------
+// Procedural surface textures
+// ------------------------------------------------------------
+
+function bfCanvasTexture(kind){
+  if(bfVisualTextures.has(kind)){
+    return bfVisualTextures.get(kind);
+  }
+
+  const c = document.createElement('canvas');
+  const n = 256;
+
+  c.width = n;
+  c.height = n;
+
+  const x = c.getContext('2d');
+
+  x.fillStyle = '#b7b7b7';
+  x.fillRect(0,0,n,n);
+
+  const dot = (count,a=.17,sz=2)=>{
+    for(let i=0;i<count;i++){
+      const g = 105 + Math.floor(Math.random()*120);
+
+      x.fillStyle =
+        `rgba(${g},${g},${g},${Math.random()*a})`;
+
+      const s = .4 + Math.random()*sz;
+
+      x.fillRect(
+        Math.random()*n,
+        Math.random()*n,
+        s,
+        s
+      );
+    }
+  };
+
+
+  if(kind === 'concrete'){
+
+    const g = x.createLinearGradient(0,0,n,n);
+
+    g.addColorStop(0,'#c8c8c8');
+    g.addColorStop(1,'#939393');
+
+    x.fillStyle = g;
+    x.fillRect(0,0,n,n);
+
+    dot(1800,.22,2.2);
+
+    for(let i=0;i<12;i++){
+
+      x.strokeStyle =
+        `rgba(55,55,55,${.05+Math.random()*.08})`;
+
+      x.lineWidth = .5 + Math.random();
+
+      x.beginPath();
+
+      let px = Math.random()*n;
+      let py = Math.random()*n;
+
+      x.moveTo(px,py);
+
+      for(let j=0;j<5;j++){
+        px += Math.random()*28-14;
+        py += Math.random()*28-14;
+
+        x.lineTo(px,py);
+      }
+
+      x.stroke();
+    }
+
+
+  }else if(kind === 'plaster'){
+
+    x.fillStyle = '#d1d1cd';
+    x.fillRect(0,0,n,n);
+
+    dot(1500,.12,2);
+
+    for(let i=0;i<70;i++){
+
+      x.fillStyle =
+        `rgba(90,85,78,${Math.random()*.035})`;
+
+      x.beginPath();
+
+      x.arc(
+        Math.random()*n,
+        Math.random()*n,
+        2+Math.random()*9,
+        0,
+        Math.PI*2
+      );
+
+      x.fill();
+    }
+
+
+  }else if(kind === 'wood'){
+
+    x.fillStyle = '#b1b1b1';
+    x.fillRect(0,0,n,n);
+
+    for(let y=0;y<n;y+=32){
+
+      x.fillStyle =
+        y%64===0 ? '#c5c5c5' : '#aaaaaa';
+
+      x.fillRect(0,y,n,31);
+
+      x.fillStyle = '#777';
+      x.fillRect(0,y+31,n,1);
+
+      for(let i=0;i<8;i++){
+
+        x.strokeStyle =
+          `rgba(45,45,45,${.05+Math.random()*.10})`;
+
+        x.beginPath();
+
+        x.moveTo(
+          0,
+          y+Math.random()*30
+        );
+
+        x.bezierCurveTo(
+          n*.3,
+          y+Math.random()*30,
+          n*.7,
+          y+Math.random()*30,
+          n,
+          y+Math.random()*30
+        );
+
+        x.stroke();
+      }
+    }
+
+
+  }else if(kind === 'metal'){
+
+    x.fillStyle = '#a6aaac';
+    x.fillRect(0,0,n,n);
+
+    for(let xx=0;xx<n;xx+=14){
+
+      x.fillStyle =
+        'rgba(255,255,255,.055)';
+
+      x.fillRect(xx,0,4,n);
+
+      x.fillStyle =
+        'rgba(0,0,0,.075)';
+
+      x.fillRect(xx+8,0,3,n);
+    }
+
+    dot(450,.07,1.2);
+
+
+  }else if(kind === 'turf'){
+
+    x.fillStyle = '#ababab';
+    x.fillRect(0,0,n,n);
+
+    for(let y=0;y<n;y+=24){
+
+      x.fillStyle =
+        y%48===0
+          ? 'rgba(255,255,255,.06)'
+          : 'rgba(0,0,0,.045)';
+
+      x.fillRect(0,y,n,24);
+    }
+
+    for(let i=0;i<2600;i++){
+
+      const v =
+        90 + Math.floor(Math.random()*120);
+
+      x.fillStyle =
+        `rgba(${v},${v},${v},${.05+Math.random()*.13})`;
+
+      x.fillRect(
+        Math.random()*n,
+        Math.random()*n,
+        1,
+        2+Math.random()*3
+      );
+    }
+
+
+  }else if(kind === 'stone'){
+
+    x.fillStyle = '#aaa';
+    x.fillRect(0,0,n,n);
+
+    for(let y=0;y<n;y+=42){
+
+      for(let xx=-21;xx<n;xx+=54){
+
+        const xo =
+          xx + ((y/42)%2)*27;
+
+        const r =
+          145 + Math.floor(Math.random()*28);
+
+        x.fillStyle =
+          `rgb(${r},${r},${r})`;
+
+        x.fillRect(
+          xo+1,
+          y+1,
+          51,
+          39
+        );
+
+        x.strokeStyle =
+          'rgba(45,45,45,.18)';
+
+        x.strokeRect(
+          xo+1,
+          y+1,
+          51,
+          39
+        );
+      }
+    }
+
+    dot(500,.08,1.5);
+
+
+  }else{
+
+    x.fillStyle = '#bbb';
+    x.fillRect(0,0,n,n);
+
+    dot(1200,.10,1.8);
+  }
+
+
+  const t =
+    new THREE.CanvasTexture(c);
+
+  t.wrapS =
+    t.wrapT =
+      THREE.RepeatWrapping;
+
+  t.repeat.set(
+    kind==='turf' ? 8 : 3.25,
+    kind==='turf' ? 8 : 3.25
+  );
+
+  t.colorSpace =
+    THREE.SRGBColorSpace;
+
+  t.anisotropy =
+    Math.min(
+      8,
+      renderer?.capabilities?.getMaxAnisotropy?.() || 4
+    );
+
+  t.userData.bfVisual = true;
+
+  bfVisualTextures.set(kind,t);
+
+  return t;
+}
+
+
+// ------------------------------------------------------------
+// PBR material system
+// ------------------------------------------------------------
+
+function bfMatKey(
+  theme,
+  tag,
+  c,
+  kind,
+  extra=''
+){
+  return (
+    `${theme}|${tag}|${c}|${kind}|${extra}`
+  );
+}
+
+
+function bfPBRMaterial(
+  kind,
+  c,
+  opts={}
+){
+
+  const key = bfMatKey(
+    opts.theme || '',
+    opts.tag || '',
+    String(c),
+    kind,
+    `${opts.transparent?'t':''}:`+
+    `${opts.opacity??1}:`+
+    `${opts.metalness??''}:`+
+    `${opts.roughness??''}`
+  );
+
+  if(bfVisualMaterials.has(key)){
+    return bfVisualMaterials.get(key);
+  }
+
+
+  const params = {
+
+    color:
+      new THREE.Color(c || '#888'),
+
+    map:
+      opts.map === false
+        ? null
+        : bfCanvasTexture(kind),
+
+    roughness:
+      opts.roughness ??
+      (
+        kind==='metal'
+          ? .42
+          : kind==='wood'
+          ? .76
+          : kind==='turf'
+          ? .96
+          : .88
+      ),
+
+    metalness:
+      opts.metalness ??
+      (
+        kind==='metal'
+          ? .68
+          : .025
+      ),
+
+    transparent:
+      !!opts.transparent,
+
+    opacity:
+      opts.opacity ?? 1,
+
+    side:
+      opts.side ??
+      THREE.FrontSide
+  };
+
+
+  const m =
+    opts.physical
+      ? new THREE.MeshPhysicalMaterial({
+          ...params,
+          clearcoat:
+            opts.clearcoat ?? 0,
+          clearcoatRoughness:
+            opts.clearcoatRoughness ?? .3,
+          transmission:
+            opts.transmission ?? 0,
+          thickness:
+            opts.thickness ?? 0
+        })
+      : new THREE.MeshStandardMaterial(
+          params
+        );
+
+
+  m.userData.bfVisual = true;
+  m.userData.sharedResource = true;
+
+  bfVisualMaterials.set(
+    key,
+    m
+  );
+
+  return m;
+}
+
+
+function bfBoxMaterial(b){
+
+  const theme =
+    state.config?.worlds?.[state.world]?.theme
+    || 'classic';
+
+  const tag =
+    b?.tag || 'solid';
+
+  const c =
+    b?.c || '#777';
+
+
+  if(theme === 'classic'){
+
+    if(tag === 'crate'){
+      return bfPBRMaterial(
+        'wood',
+        c,
+        {
+          theme,
+          tag,
+          roughness:.76
+        }
+      );
+    }
+
+    if(tag === 'wall'){
+      return bfPBRMaterial(
+        'concrete',
+        c,
+        {
+          theme,
+          tag,
+          roughness:.92
+        }
+      );
+    }
+
+    if(tag === 'building'){
+      return bfPBRMaterial(
+        'plaster',
+        c,
+        {
+          theme,
+          tag,
+          roughness:.82
+        }
+      );
+    }
+
+    if(tag === 'cover'){
+      return bfPBRMaterial(
+        'metal',
+        c,
+        {
+          theme,
+          tag,
+          roughness:.48,
+          metalness:.42
+        }
+      );
+    }
+
+    return bfPBRMaterial(
+      'concrete',
+      c,
+      {
+        theme,
+        tag
+      }
+    );
+  }
+
+
+  if(theme === 'stadium'){
+
+    if(tag === 'goal'){
+      return bfPBRMaterial(
+        'metal',
+        c,
+        {
+          theme,
+          tag,
+          roughness:.28,
+          metalness:.6
+        }
+      );
+    }
+
+    if(
+      tag === 'stand' ||
+      tag === 'dugout'
+    ){
+      return bfPBRMaterial(
+        'concrete',
+        c,
+        {
+          theme,
+          tag,
+          roughness:.84
+        }
+      );
+    }
+
+    return bfPBRMaterial(
+      'plaster',
+      c,
+      {
+        theme,
+        tag,
+        roughness:.72
+      }
+    );
+  }
+
+
+  if(theme === 'battle'){
+
+    if(tag === 'ramp'){
+      return bfPBRMaterial(
+        'wood',
+        c,
+        {
+          theme,
+          tag,
+          roughness:.72
+        }
+      );
+    }
+
+    if(tag === 'stormwall'){
+
+      return new THREE.MeshPhysicalMaterial({
+        color:new THREE.Color(c),
+        roughness:.18,
+        metalness:.02,
+        transparent:true,
+        opacity:.36,
+        transmission:.12,
+        thickness:.08,
+        side:THREE.DoubleSide
+      });
+    }
+
+    if(tag === 'house'){
+      return bfPBRMaterial(
+        'plaster',
+        c,
+        {
+          theme,
+          tag,
+          roughness:.68
+        }
+      );
+    }
+
+    return bfPBRMaterial(
+      'metal',
+      c,
+      {
+        theme,
+        tag,
+        roughness:.62,
+        metalness:.16
+      }
+    );
+  }
+
+
+  return bfPBRMaterial(
+    'concrete',
+    c,
+    {
+      theme,
+      tag
+    }
+  );
+}
+
+
+function bfGroundMaterial(
+  theme,
+  c
+){
+
+  if(
+    theme === 'voxel' ||
+    theme === 'clan'
+  ){
+    return null;
+  }
+
+
+  if(
+    theme === 'stadium' ||
+    theme === 'battle' ||
+    theme === 'classic'
+  ){
+
+    return bfPBRMaterial(
+      'turf',
+      c,
+      {
+        theme,
+        tag:'ground',
+        roughness:.95
+      }
+    );
+  }
+
+
+  return bfPBRMaterial(
+    'concrete',
+    c,
+    {
+      theme,
+      tag:'ground'
+    }
+  );
+}
+
+
+// ------------------------------------------------------------
+// Mesh upgrade
+// ------------------------------------------------------------
+
+function bfConfigureMesh(
+  m,
+  theme=
+    state.config?.worlds?.[state.world]?.theme
+){
+
+  if(!m?.isMesh){
+    return m;
+  }
+
+
+  m.castShadow =
+    !!(
+      state.settings.quality &&
+      theme!=='voxel' &&
+      theme!=='clan'
+    );
+
+
+  m.receiveShadow =
+    theme !== 'voxel';
+
+
+  const mat = m.material;
+
+  if(
+    mat &&
+    mat.isMeshStandardMaterial
+  ){
+
+    mat.dithering = true;
+
+    if(
+      mat.envMapIntensity !== undefined
+    ){
+      mat.envMapIntensity = .7;
+    }
+  }
+
+  return m;
+}
+
+
+function bfUpgradeDirectMaterial(
+  mat,
+  theme
+){
+
+  if(
+    !mat ||
+    mat.userData?.bfVisual
+  ){
+    return mat;
+  }
+
+
+  if(mat.map){
+
+    if(mat.isMeshStandardMaterial){
+
+      mat.roughness =
+        Math.min(
+          mat.roughness ?? .8,
+          .72
+        );
+
+      mat.dithering = true;
+    }
+
+    return mat;
+  }
+
+
+  const c =
+    mat.color?.clone?.()
+    || new THREE.Color(0x888888);
+
+  const hex =
+    `#${c.getHexString()}`;
+
+
+  if(theme === 'voxel'){
+    return mat;
+  }
+
+
+  if(theme === 'clan'){
+
+    return bfPBRMaterial(
+      'plaster',
+      hex,
+      {
+        theme,
+        tag:'clan-direct',
+        roughness:.64,
+        map:false
+      }
+    );
+  }
+
+
+  if(theme === 'stadium'){
+
+    return bfPBRMaterial(
+      'concrete',
+      hex,
+      {
+        theme,
+        tag:'stream',
+        roughness:.78
+      }
+    );
+  }
+
+
+  if(theme === 'battle'){
+
+    return bfPBRMaterial(
+      'plaster',
+      hex,
+      {
+        theme,
+        tag:'stream',
+        roughness:.68
+      }
+    );
+  }
+
+
+  return bfPBRMaterial(
+    'concrete',
+    hex,
+    {
+      theme,
+      tag:'stream',
+      roughness:.84
+    }
+  );
+}
+
+
+function bfPolishSubtree(
+  root,
+  theme=
+    state.config?.worlds?.[state.world]?.theme
+){
+
+  root?.traverse?.(
+    n=>{
+
+      if(!n.isMesh){
+        return;
+      }
+
+      bfConfigureMesh(
+        n,
+        theme
+      );
+
+
+      if(n.material){
+
+        if(
+          Array.isArray(n.material)
+        ){
+
+          n.material =
+            n.material.map(
+              m =>
+                bfUpgradeDirectMaterial(
+                  m,
+                  theme
+                )
+            );
+
+        }else{
+
+          n.material =
+            bfUpgradeDirectMaterial(
+              n.material,
+              theme
+            );
+        }
+      }
+    }
+  );
+
+  return root;
+}
+
+
+// ------------------------------------------------------------
+// Renderer
+// ------------------------------------------------------------
+
+function bfConfigureRenderer(){
+
+  if(!renderer){
+    return;
+  }
+
+  renderer.outputColorSpace =
+    THREE.SRGBColorSpace;
+
+  renderer.toneMapping =
+    THREE.ACESFilmicToneMapping;
+
+  renderer.toneMappingExposure =
+    1.08;
+
+  renderer.shadowMap.type =
+    THREE.PCFSoftShadowMap;
+
+  renderer.shadowMap.autoUpdate =
+    true;
+
+  renderer.sortObjects = true;
+}
+
+
+// ------------------------------------------------------------
+// Atmosphere
+// ------------------------------------------------------------
+
+function bfClearAtmosphere(){
+
+  if(bfVisualLights){
+
+    scene.remove(
+      bfVisualLights
+    );
+
+    bfVisualLights.clear();
+
+    bfVisualLights = null;
+  }
+
+
+  if(bfSkyDome){
+
+    scene.remove(
+      bfSkyDome
+    );
+
+    bfSkyDome.geometry?.dispose?.();
+    bfSkyDome.material?.dispose?.();
+
+    bfSkyDome = null;
+  }
+
+
+  if(bfDust){
+
+    scene.remove(
+      bfDust
+    );
+
+    bfDust.geometry?.dispose?.();
+    bfDust.material?.dispose?.();
+
+    bfDust = null;
+  }
+}
+
+
+function bfSky(
+  top,
+  bottom
+){
+
+  const geo =
+    new THREE.SphereGeometry(
+      520,
+      28,
+      14
+    );
+
+
+  const pos =
+    geo.attributes.position;
+
+
+  const colors =
+    new Float32Array(
+      pos.count*3
+    );
+
+
+  const ct =
+    new THREE.Color(top);
+
+  const cb =
+    new THREE.Color(bottom);
+
+
+  for(let i=0;i<pos.count;i++){
+
+    const y =
+      pos.getY(i)/520;
+
+    const t =
+      clamp(
+        (y+.18)/.78,
+        0,
+        1
+      );
+
+    const c =
+      cb.clone().lerp(
+        ct,
+        t
+      );
+
+    colors[i*3] =
+      c.r;
+
+    colors[i*3+1] =
+      c.g;
+
+    colors[i*3+2] =
+      c.b;
+  }
+
+
+  geo.setAttribute(
+    'color',
+    new THREE.BufferAttribute(
+      colors,
+      3
+    )
+  );
+
+
+  const mat =
+    new THREE.MeshBasicMaterial({
+      vertexColors:true,
+      side:THREE.BackSide,
+      depthWrite:false,
+      fog:false,
+      toneMapped:false
+    });
+
+
+  const mesh =
+    new THREE.Mesh(
+      geo,
+      mat
+    );
+
+
+  mesh.frustumCulled =
+    false;
+
+  mesh.renderOrder =
+    -100;
+
+
+  scene.add(mesh);
+
+  bfSkyDome =
+    mesh;
+
+  return mesh;
+}
+
+
+function bfDustField(){
+
+  const count = 180;
+
+  const p =
+    new Float32Array(
+      count*3
+    );
+
+
+  for(let i=0;i<count;i++){
+
+    p[i*3] =
+      (Math.random()-.5)*52;
+
+    p[i*3+1] =
+      .15 + Math.random()*8;
+
+    p[i*3+2] =
+      (Math.random()-.5)*52;
+  }
+
+
+  const g =
+    new THREE.BufferGeometry();
+
+
+  g.setAttribute(
+    'position',
+    new THREE.BufferAttribute(
+      p,
+      3
+    )
+  );
+
+
+  const m =
+    new THREE.PointsMaterial({
+      color:0xd9e5e8,
+      size:.025,
+      transparent:true,
+      opacity:.09,
+      depthWrite:false
+    });
+
+
+  const pts =
+    new THREE.Points(
+      g,
+      m
+    );
+
+
+  scene.add(pts);
+
+  bfDust =
+    pts;
+}
+
+
+// ------------------------------------------------------------
+// World-specific light profiles
+// ------------------------------------------------------------
+
+function bfAddWorldLights(id){
+
+  bfVisualLights =
+    new THREE.Group();
+
+  scene.add(
+    bfVisualLights
+  );
+
+
+  const addLight = l=>{
+    l.castShadow = false;
+
+    bfVisualLights.add(l);
+
+    return l;
+  };
+
+
+  if(id === 'classic'){
+
+    const a =
+      addLight(
+        new THREE.PointLight(
+          0xbfe5ff,
+          4.0,
+          28,
+          2
+        )
+      );
+
+    a.position.set(
+      -23,
+      7,
+      -18
+    );
+
+
+    const b =
+      addLight(
+        new THREE.PointLight(
+          0xffc37a,
+          3.1,
+          24,
+          2
+        )
+      );
+
+    b.position.set(
+      23,
+      7,
+      20
+    );
+
+
+  }else if(id === 'stadium'){
+
+    for(
+      const [x,z]
+      of [
+        [-36,-27],
+        [36,-27],
+        [-36,27],
+        [36,27]
+      ]
+    ){
+
+      const s =
+        new THREE.SpotLight(
+          0xe7f4ff,
+          5.2,
+          90,
+          Math.PI/5,
+          .7,
+          1.1
+        );
+
+      s.position.set(
+        x,
+        18,
+        z
+      );
+
+      s.target.position.set(
+        0,
+        0,
+        0
+      );
+
+      s.castShadow =
+        false;
+
+      bfVisualLights.add(
+        s,
+        s.target
+      );
+    }
+
+
+  }else if(id === 'battle'){
+
+    const a =
+      addLight(
+        new THREE.DirectionalLight(
+          0xffd3a1,
+          1.1
+        )
+      );
+
+    a.position.set(
+      -25,
+      32,
+      18
+    );
+
+
+    const b =
+      addLight(
+        new THREE.PointLight(
+          0x8f72ff,
+          2.2,
+          44,
+          2
+        )
+      );
+
+    b.position.set(
+      0,
+      9,
+      0
+    );
+
+
+  }else if(id === 'clan'){
+
+    const a =
+      addLight(
+        new THREE.DirectionalLight(
+          0xffe0a8,
+          .9
+        )
+      );
+
+    a.position.set(
+      -22,
+      35,
+      -12
+    );
+  }
+}
+
+
+function bfApplyWorldProfile(id){
+
+  bfClearAtmosphere();
+  bfConfigureRenderer();
+
+
+  const profiles = {
+
+    classic:{
+      top:0x69b8df,
+      bottom:0xcddde0,
+      fog:0x8fb8c5,
+      hemi:1.05,
+      sun:1.75,
+      exp:1.02
+    },
+
+    voxel:{
+      top:0x62b9ee,
+      bottom:0xd8efff,
+      fog:0xaeddf2,
+      hemi:1.25,
+      sun:1.55,
+      exp:1.05
+    },
+
+    stadium:{
+      top:0x5aa8d2,
+      bottom:0xd9edf4,
+      fog:0x87adbd,
+      hemi:1.0,
+      sun:1.65,
+      exp:1.05
+    },
+
+    battle:{
+      top:0x6faff3,
+      bottom:0xd8d1f5,
+      fog:0x9db4d2,
+      hemi:1.18,
+      sun:1.8,
+      exp:1.08
+    },
+
+    clan:{
+      top:0x66b9ea,
+      bottom:0xdceec7,
+      fog:0xa8c9aa,
+      hemi:1.35,
+      sun:1.9,
+      exp:1.08
+    }
+  };
+
+
+  const p =
+    profiles[id] ||
+    profiles.classic;
+
+
+  renderer.toneMappingExposure =
+    p.exp;
+
+
+  hemi.intensity =
+    p.hemi;
+
+
+  sun.intensity =
+    p.sun;
+
+
+  sun.color.set(
+    id==='battle'
+      ? 0xfff0d7
+      : id==='clan'
+      ? 0xfff2cf
+      : 0xffffff
+  );
+
+
+  if(scene.fog){
+    scene.fog.color.set(
+      p.fog
+    );
+  }
+
+
+  // Voxel keeps its original day/night sky,
+  // because Minecraft-style day/night is gameplay identity.
+  if(id !== 'voxel'){
+    bfSky(
+      p.top,
+      p.bottom
+    );
+  }
+
+
+  bfAddWorldLights(id);
+
+
+  if(id === 'classic'){
+    bfDustField();
+  }
+
+
+  if(
+    state.settings.quality &&
+    id!=='voxel' &&
+    id!=='clan'
+  ){
+
+    renderer.shadowMap.enabled =
+      true;
+
+    sun.castShadow =
+      true;
+
+    sun.shadow.mapSize.set(
+      2048,
+      2048
+    );
+
+    sun.shadow.bias =
+      -.00015;
+
+    sun.shadow.normalBias =
+      .018;
+
+  }else{
+
+    renderer.shadowMap.enabled =
+      false;
+
+    sun.castShadow =
+      false;
+  }
+}
+
+
+// ------------------------------------------------------------
+// More architectural detail without changing collision
+// ------------------------------------------------------------
+
+function bfAddClassicArchitecture(){
+
+  if(state.world !== 'classic'){
+    return;
+  }
+
+
+  const w =
+    state.config?.worlds?.classic;
+
+  if(!w){
+    return;
+  }
+
+
+  const glass =
+    new THREE.MeshPhysicalMaterial({
+      color:0x8fc7d9,
+      roughness:.12,
+      metalness:.08,
+      transparent:true,
+      opacity:.38,
+      transmission:.12,
+      thickness:.04,
+      emissive:0x17323a,
+      emissiveIntensity:.25
+    });
+
+
+  for(
+    const b
+    of w.boxes || []
+  ){
+
+    if(b.tag !== 'building'){
+      continue;
+    }
+
+
+    const longX =
+      b.w >= b.d;
+
+
+    const count =
+      Math.max(
+        2,
+        Math.min(
+          5,
+          Math.floor(
+            (
+              longX
+                ? b.w
+                : b.d
+            ) / 3
+          )
+        )
+      );
+
+
+    for(let i=0;i<count;i++){
+
+      const f =
+        (i+.5)/count-.5;
+
+
+      const x =
+        b.x +
+        (
+          longX
+            ? f*b.w*.75
+            : b.w/2+.021
+        );
+
+
+      const z =
+        b.z +
+        (
+          longX
+            ? b.d/2+.021
+            : f*b.d*.75
+        );
+
+
+      const panel =
+        new THREE.Mesh(
+
+          new RoundedBoxGeometry(
+            longX ? 1.45 : .045,
+            1.25,
+            longX ? .045 : 1.45,
+            2,
+            .025
+          ),
+
+          glass
+        );
+
+
+      panel.position.set(
+        x,
+        b.y+.55,
+        z
+      );
+
+
+      decorGroup.add(
+        panel
+      );
+
+
+      if(longX){
+
+        const back =
+          panel.clone();
+
+        back.position.z =
+          b.z-b.d/2-.021;
+
+        decorGroup.add(
+          back
+        );
+
+      }else{
+
+        const back =
+          panel.clone();
+
+        back.position.x =
+          b.x-b.w/2-.021;
+
+        decorGroup.add(
+          back
+        );
+      }
+    }
+  }
+}
+
+
+// ------------------------------------------------------------
+// First-person weapon polish
+// ------------------------------------------------------------
+
+function bfPolishWeapon(){
+
+  if(!weaponGroup){
+    return;
+  }
+
+
+  const gunHeld =
+    state.world!=='voxel' ||
+    mcSelectedItem() ===
+      MC_RESERVED_GUN;
+
+
+  if(!gunHeld){
+    return;
+  }
+
+
+  weaponGroup.traverse(
+    n=>{
+
+      if(!n.isMesh){
+        return;
+      }
+
+
+      n.castShadow = false;
+      n.receiveShadow = false;
+      n.frustumCulled = false;
+
+
+      if(
+        n.material?.isMeshStandardMaterial
+      ){
+
+        n.material.roughness =
+          Math.min(
+            n.material.roughness ?? .7,
+            .58
+          );
+
+        n.material.metalness =
+          Math.max(
+            n.material.metalness ?? 0,
+            .12
+          );
+      }
+    }
+  );
+
+
+  // Hide original rectangular arm.
+  for(
+    const n
+    of weaponGroup.children
+  ){
+
+    if(
+      n.isMesh &&
+      n.geometry?.type === 'BoxGeometry' &&
+      n.material?.color
+    ){
+
+      const c =
+        n.material.color.getHex();
+
+      if(
+        c === 0xc88c67 &&
+        n.position.y < -.30
+      ){
+        n.visible = false;
+      }
+    }
+  }
+
+
+  const skin =
+    bfPBRMaterial(
+      'plaster',
+      '#c88c67',
+      {
+        theme:'weapon',
+        tag:'skin',
+        roughness:.82,
+        map:false
+      }
+    );
+
+
+  const glove =
+    bfPBRMaterial(
+      'fabric',
+      '#20282d',
+      {
+        theme:'weapon',
+        tag:'glove',
+        roughness:.92,
+        map:false
+      }
+    );
+
+
+  const metal =
+    bfPBRMaterial(
+      'metal',
+      '#20252a',
+      {
+        theme:'weapon',
+        tag:'gunmetal',
+        roughness:.31,
+        metalness:.76
+      }
+    );
+
+
+  const arm = (
+    x,
+    y,
+    z,
+    rz,
+    rx
+  )=>{
+
+    const a =
+      new THREE.Mesh(
+
+        new THREE.CylinderGeometry(
+          .065,
+          .078,
+          .48,
+          10
+        ),
+
+        skin
+      );
+
+
+    a.position.set(
+      x,
+      y,
+      z
+    );
+
+    a.rotation.set(
+      rx,
+      0,
+      rz
+    );
+
+    weaponGroup.add(a);
+
+
+    const h =
+      new THREE.Mesh(
+
+        new THREE.SphereGeometry(
+          .082,
+          12,
+          9
+        ),
+
+        glove
+      );
+
+
+    h.position.set(
+      x+(rz>0?.13:-.10),
+      y+.14,
+      z-.18
+    );
+
+
+    weaponGroup.add(h);
+  };
+
+
+  arm(
+    -.04,
+    -.40,
+    -.62,
+    .48,
+    -1.18
+  );
+
+
+  arm(
+    .44,
+    -.39,
+    -.34,
+    -.45,
+    -1.15
+  );
+
+
+  const barrel =
+    new THREE.Mesh(
+
+      new THREE.CylinderGeometry(
+        .020,
+        .024,
+        .46,
+        12
+      ),
+
+      metal
+    );
+
+
+  barrel.rotation.x =
+    Math.PI/2;
+
+
+  barrel.position.set(
+    .35,
+    -.18,
+    -1.50
+  );
+
+
+  weaponGroup.add(barrel);
+
+
+  const rail =
+    new THREE.Mesh(
+
+      new THREE.BoxGeometry(
+        .11,
+        .035,
+        .62
+      ),
+
+      metal
+    );
+
+
+  rail.position.set(
+    .35,
+    -.105,
+    -.80
+  );
+
+
+  weaponGroup.add(rail);
+
+
+  if(
+    state.weapon !== 'Shotgun' &&
+    state.weapon !== 'Milan Gun' &&
+    state.weapon !== 'Bomhof Gun'
+  ){
+
+    const frame =
+      new THREE.Mesh(
+
+        new THREE.TorusGeometry(
+          .058,
+          .010,
+          8,
+          22
+        ),
+
+        metal
+      );
+
+
+    frame.rotation.x =
+      Math.PI/2;
+
+
+    frame.position.set(
+      .35,
+      -.065,
+      -.68
+    );
+
+
+    weaponGroup.add(frame);
+
+
+    const glass =
+      new THREE.Mesh(
+
+        new THREE.CircleGeometry(
+          .05,
+          20
+        ),
+
+        new THREE.MeshBasicMaterial({
+          color:0x5bc3da,
+          transparent:true,
+          opacity:.12,
+          side:THREE.DoubleSide,
+          depthWrite:false
+        })
+      );
+
+
+    glass.position.set(
+      .35,
+      -.065,
+      -.684
+    );
+
+
+    weaponGroup.add(glass);
+
+
+    const dot =
+      new THREE.Mesh(
+
+        new THREE.SphereGeometry(
+          .0045,
+          8,
+          8
+        ),
+
+        new THREE.MeshBasicMaterial({
+          color:0xff493d,
+          toneMapped:false
+        })
+      );
+
+
+    dot.position.set(
+      .35,
+      -.065,
+      -.69
+    );
+
+
+    weaponGroup.add(dot);
+  }
+
+
+  const flashMat =
+    new THREE.MeshBasicMaterial({
+      color:0xffd18b,
+      transparent:true,
+      opacity:0,
+      depthWrite:false,
+      blending:THREE.AdditiveBlending,
+      toneMapped:false
+    });
+
+
+  bfMuzzleFlash =
+    new THREE.Mesh(
+
+      new THREE.ConeGeometry(
+        .075,
+        .42,
+        8
+      ),
+
+      flashMat
+    );
+
+
+  bfMuzzleFlash.rotation.x =
+    -Math.PI/2;
+
+
+  bfMuzzleFlash.position.set(
+    .35,
+    -.20,
+    -1.91
+  );
+
+
+  bfMuzzleFlash.visible =
+    false;
+
+
+  weaponGroup.add(
+    bfMuzzleFlash
+  );
+}
+
+
+// ------------------------------------------------------------
+// Better remote-player presentation
+// ------------------------------------------------------------
+
+function bfPolishRemote(
+  group,
+  p
+){
+
+  if(
+    !group ||
+    group.userData.bfVisualPlayer
+  ){
+    return;
+  }
+
+
+  group.userData.bfVisualPlayer =
+    true;
+
+
+  const old =
+    group.children
+      .filter(n=>n.isMesh)
+      .slice(0,3);
+
+
+  for(
+    const n
+    of old
+  ){
+    n.visible = false;
+  }
+
+
+  const c =
+    state.config.classes[p.klass]?.color
+    || '#b7c0c8';
+
+
+  const uniform =
+    bfPBRMaterial(
+      'fabric',
+      c,
+      {
+        theme:'player',
+        tag:p.klass,
+        roughness:.82,
+        map:false
+      }
+    );
+
+
+  const dark =
+    bfPBRMaterial(
+      'fabric',
+      '#252b30',
+      {
+        theme:'player',
+        tag:'pants',
+        roughness:.9,
+        map:false
+      }
+    );
+
+
+  const skin =
+    bfPBRMaterial(
+      'plaster',
+      '#c88c67',
+      {
+        theme:'player',
+        tag:'skin',
+        roughness:.9,
+        map:false
+      }
+    );
+
+
+  const gun =
+    bfPBRMaterial(
+      'metal',
+      '#1b2024',
+      {
+        theme:'player',
+        tag:'gun',
+        roughness:.35,
+        metalness:.55
+      }
+    );
+
+
+  const body =
+    new THREE.Mesh(
+
+      new RoundedBoxGeometry(
+        .62,
+        .88,
+        .46,
+        4,
+        .12
+      ),
+
+      uniform
+    );
+
+
+  body.position.y =
+    1.08;
+
+
+  group.add(body);
+
+
+  const head =
+    new THREE.Mesh(
+
+      new THREE.SphereGeometry(
+        .27,
+        14,
+        10
+      ),
+
+      skin
+    );
+
+
+  head.position.y =
+    1.72;
+
+
+  group.add(head);
+
+
+  for(
+    const s
+    of [-1,1]
+  ){
+
+    const leg =
+      new THREE.Mesh(
+
+        new THREE.CylinderGeometry(
+          .105,
+          .12,
+          .58,
+          9
+        ),
+
+        dark
+      );
+
+
+    leg.position.set(
+      .16*s,
+      .43,
+      0
+    );
+
+
+    group.add(leg);
+
+
+    const arm =
+      new THREE.Mesh(
+
+        new THREE.CylinderGeometry(
+          .095,
+          .105,
+          .50,
+          9
+        ),
+
+        uniform
+      );
+
+
+    arm.position.set(
+      .37*s,
+      1.16,
+      -.04
+    );
+
+
+    arm.rotation.z =
+      s*.12;
+
+
+    group.add(arm);
+  }
+
+
+  const weapon =
+    new THREE.Mesh(
+
+      new RoundedBoxGeometry(
+        .14,
+        .14,
+        .78,
+        2,
+        .025
+      ),
+
+      gun
+    );
+
+
+  weapon.position.set(
+    .38,
+    1.18,
+    -.28
+  );
+
+
+  weapon.rotation.x =
+    -.08;
+
+
+  group.add(weapon);
+
+
+  bfPolishSubtree(
+    group,
+    state.config?.worlds?.[state.world]?.theme
+  );
+}
+
+
+// ------------------------------------------------------------
+// Per-frame atmosphere / muzzle FX
+// ------------------------------------------------------------
+
+function bfFrameVisualFX(dt){
+
+  if(bfSkyDome){
+    bfSkyDome.position.copy(
+      camera.position
+    );
+  }
+
+
+  if(bfDust){
+
+    bfDust.position.set(
+      camera.position.x,
+      0,
+      camera.position.z
+    );
+
+    bfDust.rotation.y +=
+      dt*.006;
+  }
+
+
+  if(
+    bfMuzzleFlash &&
+    muzzle
+  ){
+
+    const hot =
+      muzzle.intensity > 1.2;
+
+
+    bfMuzzleFlash.visible =
+      hot;
+
+
+    if(hot){
+
+      bfMuzzleFlash.material.opacity =
+        .42 + Math.random()*.38;
+
+
+      bfMuzzleFlash.scale.setScalar(
+        .75 + Math.random()*.65
+      );
+
+    }else{
+
+      bfMuzzleFlash.material.opacity =
+        0;
+    }
+  }
+}
+
+
+// ------------------------------------------------------------
+// Wrap existing visual functions.
+// These wrappers do not modify gameplay logic.
+// ------------------------------------------------------------
+
+const bfOriginalSetupScene =
+  setupScene;
+
+
+setupScene = function(){
+
+  const r =
+    bfOriginalSetupScene();
+
+  bfConfigureRenderer();
+
+  return r;
+};
+
+
+const bfOriginalAddBox =
+  addBox;
+
+
+addBox = function(
+  group,
+  b,
+  material=null
+){
+
+  const m =
+    bfOriginalAddBox(
+      group,
+      b,
+      material || bfBoxMaterial(b)
+    );
+
+
+  return bfConfigureMesh(
+    m,
+    state.config?.worlds?.[state.world]?.theme
+  );
+};
+
+
+const bfOriginalAddPlane =
+  addPlane;
+
+
+addPlane = function(
+  group,
+  w,
+  h,
+  c,
+  x,
+  y,
+  z,
+  rx=-Math.PI/2
+){
+
+  const m =
+    bfOriginalAddPlane(
+      group,
+      w,
+      h,
+      c,
+      x,
+      y,
+      z,
+      rx
+    );
+
+
+  const theme =
+    state.config?.worlds?.[state.world]?.theme;
+
+
+  if(
+    theme !== 'voxel' &&
+    w > 20 &&
+    h > 20
+  ){
+
+    const mat =
+      bfGroundMaterial(
+        theme,
+        c
+      );
+
+    if(mat){
+      m.material = mat;
+    }
+  }
+
+
+  return bfConfigureMesh(
+    m,
+    theme
+  );
+};
+
+
+const bfOriginalClanMaterial =
+  clanMaterial;
+
+
+clanMaterial = function(
+  c,
+  transparent=false,
+  opacity=1
+){
+
+  const m =
+    bfOriginalClanMaterial(
+      c,
+      transparent,
+      opacity
+    );
+
+
+  if(!m.userData.bfTuned){
+
+    m.userData.bfTuned =
+      true;
+
+    m.roughness =
+      .60;
+
+    m.metalness =
+      .035;
+
+    m.dithering =
+      true;
+  }
+
+
+  return m;
+};
+
+
+const bfOriginalClanGLBClone =
+  clanGLBClone;
+
+
+clanGLBClone = function(
+  ...args
+){
+
+  const clone =
+    bfOriginalClanGLBClone(
+      ...args
+    );
+
+
+  if(clone){
+    bfPolishSubtree(
+      clone,
+      'clan'
+    );
+  }
+
+
+  return clone;
+};
+
+
+const bfOriginalRenderClanFarVillages =
+  renderClanFarVillages;
+
+
+renderClanFarVillages = function(
+  group,
+  villages
+){
+
+  const n =
+    group.children.length;
+
+
+  const r =
+    bfOriginalRenderClanFarVillages(
+      group,
+      villages
+    );
+
+
+  for(
+    let i=n;
+    i<group.children.length;
+    i++
+  ){
+
+    bfPolishSubtree(
+      group.children[i],
+      'clan'
+    );
+  }
+
+
+  return r;
+};
+
+
+const bfOriginalAddStreamChunk =
+  addStreamChunk;
+
+
+addStreamChunk = function(
+  theme,
+  cx,
+  cz,
+  span
+){
+
+  const n =
+    streamGroup?.children?.length || 0;
+
+
+  const r =
+    bfOriginalAddStreamChunk(
+      theme,
+      cx,
+      cz,
+      span
+    );
+
+
+  for(
+    let i=n;
+    i<(streamGroup?.children?.length || 0);
+    i++
+  ){
+
+    bfPolishSubtree(
+      streamGroup.children[i],
+      theme
+    );
+  }
+
+
+  return r;
+};
+
+
+const bfOriginalCreateWeapon =
+  createWeapon;
+
+
+createWeapon = function(){
+
+  const r =
+    bfOriginalCreateWeapon();
+
+  bfPolishWeapon();
+
+  return r;
+};
+
+
+const bfOriginalCreateRemote =
+  createRemote;
+
+
+createRemote = function(p){
+
+  const r =
+    bfOriginalCreateRemote(p);
+
+  bfPolishRemote(
+    r?.group,
+    p
+  );
+
+  return r;
+};
+
+
+const bfOriginalBuildWorld =
+  buildWorld;
+
+
+buildWorld = function(id){
+
+  const r =
+    bfOriginalBuildWorld(id);
+
+
+  bfApplyWorldProfile(id);
+
+
+  bfPolishSubtree(
+    worldGroup,
+    state.config?.worlds?.[id]?.theme
+  );
+
+
+  bfPolishSubtree(
+    decorGroup,
+    state.config?.worlds?.[id]?.theme
+  );
+
+
+  bfPolishSubtree(
+    streamGroup,
+    state.config?.worlds?.[id]?.theme
+  );
+
+
+  if(id === 'classic'){
+    bfAddClassicArchitecture();
+  }
+
+
+  if(renderer.compileAsync){
+    renderer
+      .compileAsync(
+        scene,
+        camera
+      )
+      .catch(()=>{});
+  }
+
+
+  return r;
+};
 
 boot().catch(err=>{console.error(err);document.body.insertAdjacentHTML('beforeend',`<div style="position:fixed;inset:20px;z-index:999;background:#200;color:#fff;padding:20px">Blockfront failed to start: ${esc(err.message||err)}</div>`)});
